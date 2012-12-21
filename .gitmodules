@@ -1,0 +1,6 @@
+[submodule "src/femebe"]
+	path = src/femebe
+	url = https://github.com/deafbybeheading/femebe.git
+[submodule "src/logplexc"]
+	path = src/logplexc
+	url = https://github.com/fdr/logplexc.git

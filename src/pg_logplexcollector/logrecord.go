@@ -1,0 +1,245 @@
+package main
+
+import (
+	"bytes"
+	"encoding/binary"
+	"femebe"
+	"fmt"
+	"io"
+)
+
+type logRecord struct {
+	LogTime          string
+	UserName         *string
+	DatabaseName     *string
+	Pid              int32
+	ClientAddr       *string
+	SessionId        string
+	SeqNum           int64
+	PsDisplay        *string
+	SessionStart     string
+	Vxid             *string
+	Txid             uint64
+	ELevel           int32
+	SQLState         *string
+	ErrMessage       *string
+	ErrDetail        *string
+	ErrHint          *string
+	InternalQuery    *string
+	InternalQueryPos int32
+	ErrContext       *string
+	UserQuery        *string
+	UserQueryPos     int32
+	FileErrPos       *string
+	ApplicationName  *string
+}
+
+func (lr *logRecord) oneLine() []byte {
+	buf := bytes.Buffer{}
+
+	wd := func() {
+		buf.WriteByte(' ')
+	}
+
+	ws := func(name string, s string) {
+		buf.WriteString(fmt.Sprintf("%s=%q", name, s))
+	}
+
+	wns := func(name string, s *string) {
+		body := func() string {
+			if s == nil {
+				return "NULL"
+			}
+
+			return fmt.Sprintf("[%q]", *s)
+		}()
+
+		buf.WriteString(name)
+		buf.WriteByte('=')
+		buf.WriteString(body)
+	}
+
+	wnum := func(name string, n interface{}) {
+		buf.WriteString(fmt.Sprintf("%s=%d", name, n))
+	}
+
+	ws("LogTime", lr.LogTime)
+	wd()
+	wns("UserName", lr.UserName)
+	wd()
+	wns("DatabaseName", lr.DatabaseName)
+	wd()
+	wnum("Pid", lr.Pid)
+	wd()
+	wns("ClientAddr", lr.ClientAddr)
+	wd()
+	ws("SessionId", lr.SessionId)
+	wd()
+	wnum("SeqNum", lr.SeqNum)
+	wd()
+	wns("PsDisplay", lr.PsDisplay)
+	wd()
+	ws("SessionStart", lr.SessionStart)
+	wd()
+	wns("Vxid", lr.Vxid)
+	wd()
+	wnum("Txid", lr.Txid)
+	wd()
+	wnum("ELevel", lr.ELevel)
+	wd()
+	wns("SQLState", lr.SQLState)
+	wd()
+	wns("ErrMessage", lr.ErrMessage)
+	wd()
+	wns("ErrDetail", lr.ErrDetail)
+	wd()
+	wns("ErrHint", lr.ErrHint)
+	wd()
+	wns("InternalQuery", lr.InternalQuery)
+	wd()
+	wnum("InternalQueryPos", lr.InternalQueryPos)
+	wd()
+	wns("ErrContext", lr.ErrContext)
+	wd()
+	wns("UserQuery", lr.UserQuery)
+	wd()
+	wnum("UserQueryPos", lr.UserQueryPos)
+	wd()
+	wns("FileErrPos", lr.FileErrPos)
+	wd()
+	wns("ApplicationName", lr.ApplicationName)
+
+	return buf.Bytes()
+}
+
+func readInt64(r io.Reader) (ret int64, err error) {
+	var be [8]byte
+
+	valBytes := be[0:8]
+	if _, err = io.ReadFull(r, valBytes); err != nil {
+		return 0, err
+	}
+
+	return int64(binary.BigEndian.Uint64(valBytes)), nil
+}
+
+func readUint64(r io.Reader) (ret uint64, err error) {
+	var be [8]byte
+
+	valBytes := be[0:8]
+	if _, err = io.ReadFull(r, valBytes); err != nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint64(valBytes), nil
+}
+
+func parseLogRecord(
+	dst *logRecord, data []byte, exitFn func(args ...interface{})) {
+
+	buf := bytes.NewBuffer(data)
+
+	// Read the next nullable string from buf, returning a 'nil'
+	// *string should it be null.
+	nextNullableString := func() *string {
+		np, err := femebe.ReadByte(buf)
+		if err != nil {
+			exitFn(err)
+		}
+
+		switch np {
+		case 'P':
+			s, err := femebe.ReadCString(buf)
+			if err != nil {
+				exitFn(err)
+			}
+
+			return &s
+
+		case 'N':
+			// 'N' is still followed by a NUL byte that
+			// must be consumed.
+			_, err := femebe.ReadCString(buf)
+			if err != nil {
+				exitFn(err)
+			}
+
+			return nil
+
+		default:
+			exitFn("Expected nullable string "+
+				"control character, got %c", np)
+
+		}
+
+		exitFn("Prior switch should always return")
+		panic("exitFn should panic/return")
+	}
+
+	// Read a non-nullable string from buf
+	nextString := func() string {
+		s, err := femebe.ReadCString(buf)
+		if err != nil {
+			exitFn(err)
+		}
+
+		return s
+	}
+
+	nextInt32 := func() int32 {
+		i32, err := femebe.ReadInt32(buf)
+		if err != nil {
+			exitFn(err)
+		}
+
+		return i32
+	}
+
+	nextInt64 := func() int64 {
+		i64, err := readInt64(buf)
+		if err != nil {
+			exitFn(err)
+		}
+
+		return i64
+	}
+
+	nextUint64 := func() uint64 {
+		ui64, err := readUint64(buf)
+		if err != nil {
+			exitFn(err)
+		}
+
+		return ui64
+	}
+
+	dst.LogTime = nextString()
+	dst.UserName = nextNullableString()
+	dst.DatabaseName = nextNullableString()
+	dst.Pid = nextInt32()
+	dst.ClientAddr = nextNullableString()
+	dst.SessionId = nextString()
+	dst.SeqNum = nextInt64()
+	dst.PsDisplay = nextNullableString()
+	dst.SessionStart = nextString()
+	dst.Vxid = nextNullableString()
+	dst.Txid = nextUint64()
+	dst.ELevel = nextInt32()
+	dst.SQLState = nextNullableString()
+	dst.ErrMessage = nextNullableString()
+	dst.ErrDetail = nextNullableString()
+	dst.ErrHint = nextNullableString()
+	dst.InternalQuery = nextNullableString()
+	dst.InternalQueryPos = nextInt32()
+	dst.ErrContext = nextNullableString()
+	dst.UserQuery = nextNullableString()
+	dst.UserQueryPos = nextInt32()
+	dst.FileErrPos = nextNullableString()
+	dst.ApplicationName = nextNullableString()
+
+	if buf.Len() != 0 {
+		exitFn("LogRecord message has mismatched "+
+			"length header and cString contents: remaining %d",
+			buf.Len())
+	}
+}
