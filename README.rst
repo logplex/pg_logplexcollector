@@ -8,10 +8,9 @@ This implements a tool to accept the protocol emitted by `pg_logfebe`_
 It is necessary to download submodules and set GOPATH to build the
 program with the most convenience by writing::
 
-  $ export GOPATH=`pwd`
   $ git submodule init
   $ git submodule update
-  $ go install pg_logplexcollector
+  $ make
 
 This is because git submodules are used to version and retrieve other
 libraries, such as femebe and logplexc.  Having done this though, "go
