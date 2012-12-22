@@ -200,7 +200,7 @@ func main() {
 
 	// Set up log prefix for all future system diagnostic
 	// messages.
-	log.SetPrefix("pg_logplexcollector: ")
+	log.SetPrefix("pg_logplexcollector ")
 
 	// Signal handling: print dying gasp and and exit
 	sigch := make(chan os.Signal)
