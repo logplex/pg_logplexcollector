@@ -222,15 +222,20 @@ func main() {
 			os.Getenv("LOGPLEX_URL"), err)
 	}
 
-	templateConfig := logplexc.Config{
-		Logplex:    *logplexUrl,
-		Token:      "",
-		HttpClient: *http.DefaultClient,
-		Transport: http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+	client := *http.DefaultClient
+	client.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
 		},
+	}
+
+	templateConfig := logplexc.Config{
+		Logplex: *logplexUrl,
+
+		// Set at connection start-up when the client self-identifies.
+		Token: "",
+
+		HttpClient: client,
 	}
 
 	// Begin listening
