@@ -21,12 +21,158 @@ const (
 	MB        = 1048576
 )
 
+// A function that, when called, panics.  The provider of the function
+// is assumed to be able to recover from the panic, usually by using a
+// sentinel value to ensure that only panics as a result of calling
+// the exitFn is called.
+//
+// If an exitFn is part of the parameter list for a function, it is
+// customary for it not to have an error return.
+//
+// This is useful when it's fairly clear that an error should be
+// handled in one part of a program all the time, e.g. abort a
+// goroutine after logging the cause of the exit.
+type exitFn func(args ...interface{})
+
+// Fills a message on behalf of the caller.  Often the closure will
+// close over a femebe.MessageStream to provide a source of data for
+// the filled message.
+type msgInit func(dst *femebe.Message, exit exitFn)
+
+// Read the version message, calling exit if this is not a supported
+// version.
+func processVerMsg(msgInit msgInit, exit exitFn) {
+	var m femebe.Message
+
+	msgInit(&m, exit)
+
+	if m.MsgType() != 'V' {
+		log.Printf("expected version ('V') message, "+
+			"but received %c", m.MsgType())
+		exit(nil)
+	}
+
+	// hard-coded lengh limit, but it's very generous
+	if m.Size() > 10*KB {
+		log.Printf("oversized message string, msg size is %d",
+			m.Size())
+	}
+
+	s, err := femebe.ReadCString(m.Payload())
+	if err != nil {
+		log.Printf("couldn't read version string: %v", err)
+		exit(nil)
+	}
+
+	if !strings.HasPrefix(s, "PG9.2.") ||
+		!strings.HasSuffix(s, "/1") {
+		exit("protocol version not supported: %s", s)
+	}
+}
+
+// Process the identity ('I') message, reporting the identity therein.
+func processIdentMsg(msgInit msgInit, exit exitFn) string {
+	var m femebe.Message
+
+	msgInit(&m, exit)
+
+	// Read the remote system identifier string
+	if m.MsgType() != 'I' {
+		log.Printf("expected identification ('I') message, "+
+			"but received %c", m.MsgType())
+		exit()
+	}
+
+	// hard-coded lengh limit, but it's very generous
+	if m.Size() > 10*KB {
+		log.Printf("oversized message string, msg size is %d",
+			m.Size())
+	}
+
+	s, err := femebe.ReadCString(m.Payload())
+	if err != nil {
+		log.Printf("couldn't read identification string: %v",
+			err)
+		exit()
+	}
+
+	return s
+}
+
+// Process a log message, sending it to the client.
+func processLogMsg(lpc *logplexc.Client, msgInit msgInit, exit exitFn) {
+	var m femebe.Message
+
+	for {
+		msgInit(&m, exit)
+
+		// Refuse to handle any log message above an arbitrary
+		// size.  Furthermore, exit the worker, closing the0
+		// connection, so that the client doesn't even bother
+		// to wait for this process to drain the oversized
+		// item and anything following it; these will be
+		// dropped.  It's on the client to gracefully handle
+		// the error and re-connect after this happens.
+		if m.Size() > 1*MB {
+			exit("client %q sent oversized log record")
+		}
+
+		payload, err := m.Force()
+		if err != nil {
+			exit("could not retreive payload of message: %v",
+				err)
+		}
+
+		var lr logRecord
+		parseLogRecord(&lr, payload, exit)
+		processLogRec(&lr, lpc, exit)
+	}
+}
+
+// Process a single logRecord value, buffering it in the logplex
+// client.
+func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
+	// Buffer to format the complete log message in.
+	msgFmtBuf := bytes.Buffer{}
+
+	// Helps with formatting a series of nullable strings.
+	catOptionalField := func(prefix string, maybePresent *string) {
+		if maybePresent != nil {
+			if prefix != "" {
+				msgFmtBuf.WriteString(prefix)
+				msgFmtBuf.WriteString(": ")
+			}
+
+			msgFmtBuf.WriteString(*maybePresent)
+			msgFmtBuf.WriteByte('\n')
+		}
+	}
+
+	catOptionalField("", lr.ErrMessage)
+	catOptionalField("Detail", lr.ErrDetail)
+	catOptionalField("Hint", lr.ErrHint)
+	catOptionalField("Query", lr.UserQuery)
+
+	lpc.BufferMessage(time.Now(), "postgres-"+lr.SessionId,
+		msgFmtBuf.Bytes())
+
+	// Post the buffered message
+	resp, err := lpc.PostMessages()
+	if err != nil {
+		exit(err)
+	}
+
+	// Can be more carefully checked and reported on to
+	// indicate configuration or Logplex issues.
+	resp.Body.Close()
+}
+
 func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 	var m femebe.Message
 	var err error
 	stream := femebe.NewServerMessageStream("", rwc)
 
-	// Exit in an orderly manner if (and only if) exitFn() is
+	// Exit in an orderly manner if (and only if) exit() is
 	// called; otherwise propagate the panic normally.
 	defer func() {
 		rwc.Close()
@@ -36,9 +182,8 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 		}
 	}()
 
-	// Convention to exit the function; useful in closures that
-	// may need to jump block scopes. 
-	exitFn := func(args ...interface{}) {
+	var exit exitFn
+	exit = func(args ...interface{}) {
 		if len(args) == 1 {
 			log.Printf("Disconnect client: %v", args[0])
 		} else if len(args) > 1 {
@@ -54,141 +199,28 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 		panic(&m)
 	}
 
-	// Function to get the next message and fill m, or immediately
-	// exit the parent function after logging the offending error.
-	mustFillNext := func() {
-		err = stream.Next(&m)
+	var msgInit msgInit
+	msgInit = func(m *femebe.Message, exit exitFn) {
+		err = stream.Next(m)
 		if err != nil {
 			log.Printf("could not read next message: %v", err)
-			exitFn(err)
+			exit(err)
 		}
-	}
-
-	// Read the version message and bomb out if it looks funny in
-	// any way.  This is also the area that will need amendment as
-	// new versions of the protocol and new versions of Postgres
-	// (which may change what error fields are available) are
-	// supported.
-	mustCheckVersion := func() {
-		if m.MsgType() != 'V' {
-			log.Printf("expected version ('V') message, "+
-				"but received %c", m.MsgType())
-			exitFn(nil)
-		}
-
-		// hard-coded lengh limit, but it's very generous
-		if m.Size() > 10*KB {
-			log.Printf("oversized message string, msg size is %d",
-				m.Size())
-		}
-
-		s, err := femebe.ReadCString(m.Payload())
-		if err != nil {
-			log.Printf("couldn't read version string: %v", err)
-			exitFn(nil)
-		}
-
-		if !strings.HasPrefix(s, "PG9.2.") ||
-			!strings.HasSuffix(s, "/1") {
-			exitFn("protocol version not supported: %s", s)
-		}
-	}
-
-	// Read the remote system identifier string
-	mustReadIdentifier := func() string {
-		if m.MsgType() != 'I' {
-			log.Printf("expected identification ('I') message, "+
-				"but received %c", m.MsgType())
-			exitFn()
-		}
-
-		// hard-coded lengh limit, but it's very generous
-		if m.Size() > 10*KB {
-			log.Printf("oversized message string, msg size is %d",
-				m.Size())
-		}
-
-		s, err := femebe.ReadCString(m.Payload())
-		if err != nil {
-			log.Printf("couldn't read identification string: %v",
-				err)
-			exitFn()
-		}
-
-		return s
 	}
 
 	// Protocol start-up; packets that are only received once.
-	mustFillNext()
-	mustCheckVersion()
-	mustFillNext()
-	ident := mustReadIdentifier()
+	processVerMsg(msgInit, exit)
+	ident := processIdentMsg(msgInit, exit)
+
 	log.Printf("client connects with identifier %q", ident)
 
 	cfg.Token = ident
 	client, err := logplexc.NewClient(&cfg)
 	if err != nil {
-		exitFn(err)
+		exit(err)
 	}
 
-	for {
-		mustFillNext()
-
-		// Refuse to handle any log message above an arbitrary
-		// size.  Furthermore, exit the worker, closing the
-		// connection, so that the client doesn't even bother
-		// to wait for this process to drain the oversized
-		// item and anything following it; these will be
-		// dropped.  It's on the client to gracefully handle
-		// the error and re-connect after this happens.
-		if m.Size() > 1*MB {
-			exitFn("client %q sent oversized log record, "+
-				"disconnecting", ident)
-		}
-
-		payload, err := m.Force()
-		if err != nil {
-			exitFn("could not retreive payload of message: %v",
-				err)
-		}
-
-		var lr logRecord
-		parseLogRecord(&lr, payload, exitFn)
-
-		// Buffer to format the complete log message in.
-		msgFmtBuf := bytes.Buffer{}
-
-		// Helps with formatting a series of nullable strings.
-		catOptionalField := func(prefix string, maybePresent *string) {
-			if maybePresent != nil {
-				if prefix != "" {
-					msgFmtBuf.WriteString(prefix)
-					msgFmtBuf.WriteString(": ")
-				}
-
-				msgFmtBuf.WriteString(*maybePresent)
-				msgFmtBuf.WriteByte('\n')
-			}
-		}
-
-		catOptionalField("", lr.ErrMessage)
-		catOptionalField("Detail", lr.ErrDetail)
-		catOptionalField("Hint", lr.ErrHint)
-		catOptionalField("Query", lr.UserQuery)
-
-		client.BufferMessage(time.Now(), "postgres-"+lr.SessionId,
-			msgFmtBuf.Bytes())
-
-		// Post the buffered message
-		resp, err := client.PostMessages()
-		if err != nil {
-			exitFn(err)
-		}
-
-		// Can be more carefully checked and reported on to
-		// indicate configuration or Logplex issues.
-		resp.Body.Close()
-	}
+	processLogMsg(client, msgInit, exit)
 }
 
 func main() {
