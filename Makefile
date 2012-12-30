@@ -3,6 +3,9 @@
 all:
 	GOPATH=`pwd`:$(GOPATH) go install pg_logplexcollector tool/logplexd
 
+fmt:
+	GOPATH=`pwd` go fmt pg_logplexcollector tool/logplexd
+
 clean:
 	rm -f bin/pg_logplexcollector
 	rm -f bin/logplexd
