@@ -6,6 +6,9 @@ all:
 fmt:
 	GOPATH=`pwd` go fmt pg_logplexcollector tool/logplexd
 
+test:
+	GOPATH=`pwd` go test pg_logplexcollector tool/logplexd
+
 clean:
 	rm -f bin/pg_logplexcollector
 	rm -f bin/logplexd
