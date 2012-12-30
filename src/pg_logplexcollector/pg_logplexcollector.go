@@ -27,7 +27,7 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 	stream := femebe.NewServerMessageStream("", rwc)
 
 	// Exit in an orderly manner if (and only if) exitFn() is
-	// called.
+	// called; otherwise propagate the panic normally.
 	defer func() {
 		rwc.Close()
 
