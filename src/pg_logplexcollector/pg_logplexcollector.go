@@ -47,9 +47,8 @@ func processVerMsg(msgInit msgInit, exit exitFn) {
 	msgInit(&m, exit)
 
 	if m.MsgType() != 'V' {
-		log.Printf("expected version ('V') message, "+
+		exit("expected version ('V') message, "+
 			"but received %c", m.MsgType())
-		exit(nil)
 	}
 
 	// hard-coded lengh limit, but it's very generous
@@ -60,8 +59,7 @@ func processVerMsg(msgInit msgInit, exit exitFn) {
 
 	s, err := femebe.ReadCString(m.Payload())
 	if err != nil {
-		log.Printf("couldn't read version string: %v", err)
-		exit(nil)
+		exit("couldn't read version string: %v", err)
 	}
 
 	if !strings.HasPrefix(s, "PG9.2.") ||
