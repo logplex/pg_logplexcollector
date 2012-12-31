@@ -119,7 +119,7 @@ func processLogMsg(lpc *logplexc.Client, msgInit msgInit, exit exitFn) {
 
 		payload, err := m.Force()
 		if err != nil {
-			exit("could not retreive payload of message: %v",
+			exit("could not retrieve payload of message: %v",
 				err)
 		}
 
