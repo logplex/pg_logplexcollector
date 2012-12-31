@@ -76,9 +76,8 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 
 	// Read the remote system identifier string
 	if m.MsgType() != 'I' {
-		log.Printf("expected identification ('I') message, "+
+		exit("expected identification ('I') message, "+
 			"but received %c", m.MsgType())
-		exit()
 	}
 
 	// hard-coded lengh limit, but it's very generous
@@ -89,9 +88,8 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 
 	s, err := femebe.ReadCString(m.Payload())
 	if err != nil {
-		log.Printf("couldn't read identification string: %v",
+		exit("couldn't read identification string: %v",
 			err)
-		exit()
 	}
 
 	return s
