@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	KB uint32 = 1024
-	MB        = 1048576
+	KB = 1024
+	MB = 1048576
 )
 
 // A function that, when called, panics.  The provider of the function
@@ -149,18 +149,11 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
 	catOptionalField("Hint", lr.ErrHint)
 	catOptionalField("Query", lr.UserQuery)
 
-	lpc.BufferMessage(time.Now(), "postgres-"+lr.SessionId,
+	err := lpc.BufferMessage(time.Now(), "postgres-"+lr.SessionId,
 		msgFmtBuf.Bytes())
-
-	// Post the buffered message
-	resp, err := lpc.PostMessages()
 	if err != nil {
 		exit(err)
 	}
-
-	// Can be more carefully checked and reported on to
-	// indicate configuration or Logplex issues.
-	resp.Body.Close()
 }
 
 func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
@@ -198,9 +191,10 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 	var msgInit msgInit
 	msgInit = func(m *femebe.Message, exit exitFn) {
 		err = stream.Next(m)
-		if err != nil {
-			log.Printf("could not read next message: %v", err)
-			exit(err)
+		if err == io.EOF {
+			exit("client disconnects")
+		} else if err != nil {
+			exit("could not read next message: %v", err)
 		}
 	}
 
@@ -215,6 +209,8 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 	if err != nil {
 		exit(err)
 	}
+
+	defer client.Close()
 
 	processLogMsg(client, msgInit, exit)
 }
@@ -258,12 +254,15 @@ func main() {
 	}
 
 	templateConfig := logplexc.Config{
-		Logplex: *logplexUrl,
+		Logplex:            *logplexUrl,
+		HttpClient:         client,
+		RequestSizeTrigger: 100 * KB,
+		Concurrency:        3,
+		TargetLogLatency:   3 * time.Second,
 
-		// Set at connection start-up when the client self-identifies.
+		// Set at connection start-up when the client
+		// self-identifies.
 		Token: "",
-
-		HttpClient: client,
 	}
 
 	// Begin listening
