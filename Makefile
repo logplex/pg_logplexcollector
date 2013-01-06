@@ -35,7 +35,10 @@ testdb: tmp/testdb
 
 tmp/src/postgres/configure:
 	mkdir -p tmp/src
-	cp -a $(PGSRCDIR) tmp/src/postgres
+	(cd tmp/src && \
+	 git archive --remote=$(PGSRC) --prefix='postgres/' \
+	   REL9_2_2 --prefix='postgres/' \
+	| tar x)
 
 tmp/src/pg_logfebe:
 	git clone https://github.com/fdr/pg_logfebe.git	tmp/src/pg_logfebe
@@ -44,7 +47,6 @@ tmp/src/pg_logfebe:
 
 tmp/postgres/bin/pg_config: tmp/src/postgres/configure
 	(cd tmp/src/postgres &&			\
-	git clean -fdx &&			\
 	env CFLAGS='-O0 -g'			\
 		./configure			\
 		--prefix=`pwd`/../../postgres	\
