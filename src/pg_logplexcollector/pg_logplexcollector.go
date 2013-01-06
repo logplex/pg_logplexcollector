@@ -258,7 +258,7 @@ func main() {
 		HttpClient:         client,
 		RequestSizeTrigger: 100 * KB,
 		Concurrency:        3,
-		TargetLogLatency:   3 * time.Second,
+		Period:             3 * time.Second,
 
 		// Set at connection start-up when the client
 		// self-identifies.
