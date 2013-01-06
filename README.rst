@@ -16,11 +16,11 @@ This is because git submodules are used to version and retrieve other
 libraries, such as femebe and logplexc.  Having done this though, "go
 build" and "go install" should work without complaint.
 
-The single weakest aspect of this implementation is that it does not
-support log dropping or timeouts at this time, nor does it think very
-hard about how to format the logs.  However, the entire system can be
-demonstrated to work end-to-end.  Having set up pg_logfebe and
-postgresql.conf something like this way::
+The single weakest aspect of this implementation is that it does
+support timeouts at this time, nor does it think very hard about how
+to format the logs.  However, the entire system can be demonstrated to
+work end-to-end.  Having set up pg_logfebe and postgresql.conf
+something like this way::
 
   shared_preload_libraries='pg_logfebe'
   logfebe.unix_socket = '/tmp/log.sock'
