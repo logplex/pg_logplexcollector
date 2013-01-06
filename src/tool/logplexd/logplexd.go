@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"os"
 	"os/signal"
 )
@@ -12,8 +13,16 @@ import (
 type LogplexPrint struct{}
 
 func (*LogplexPrint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Request: %#v", *r)
+	dump, err := httputil.DumpRequest(r, true)
+	if err != nil {
+		log.Printf("Could not dump request: %#v", err)
+	}
+
+	log.Printf("%s", dump)
+
+	// Respond saying everything is OK.
 	w.WriteHeader(http.StatusNoContent)
+
 }
 
 func main() {
