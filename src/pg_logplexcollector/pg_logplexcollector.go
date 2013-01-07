@@ -156,7 +156,7 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
 	}
 }
 
-func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
+func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config, tdb *tokenDb) {
 	var m femebe.Message
 	var err error
 	stream := femebe.NewServerMessageStream("", rwc)
@@ -201,10 +201,16 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config) {
 	// Protocol start-up; packets that are only received once.
 	processVerMsg(msgInit, exit)
 	ident := processIdentMsg(msgInit, exit)
-
 	log.Printf("client connects with identifier %q", ident)
 
-	cfg.Token = ident
+	// Resolve the identifier to a token
+	tok, ok := tdb.Resolve(ident)
+	if !ok {
+		exit("could not resolve identifier to token: %q", ident)
+	}
+
+	// Set up client with token
+	cfg.Token = tok
 	client, err := logplexc.NewClient(&cfg)
 	if err != nil {
 		exit(err)
@@ -240,10 +246,34 @@ func main() {
 		}
 	}()
 
+	if os.Getenv("LOGPLEX_URL") == "" {
+		log.Fatal("LOGPLEX_URL is unset")
+	}
+
 	logplexUrl, err := url.Parse(os.Getenv("LOGPLEX_URL"))
 	if err != nil {
-		log.Fatalf("Could not parse logplex endpoint %q: %v",
-			os.Getenv("LOGPLEX_URL"), err)
+		log.Fatalf("LOGPLEX_URL: could not parse: %q",
+			os.Getenv("LOGPLEX_URL"))
+	}
+
+	// Set up token database and perform its input checking
+	tdbDir := os.Getenv("TOKEN_DB_DIR")
+	if tdbDir == "" {
+		log.Fatal("TOKEN_DB_DIR is unset: it must have the value " +
+			"of an existing token database.  " +
+			"This can be an be an empty directory.")
+	}
+
+	tdb := newTokenDb(tdbDir)
+	err = tdb.Poll()
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Fatal("TOKEN_DB_DIR is set to a non-existant "+
+				"directory: %v", err)
+		}
+
+		log.Fatalf("token database suffers an unrecoverable error: %v",
+			err)
 	}
 
 	client := *http.DefaultClient
@@ -279,6 +309,12 @@ func main() {
 			log.Printf("accept error: %v", err)
 		}
 
-		go logWorker(conn, templateConfig)
+		err = tdb.Poll()
+		if err != nil {
+			log.Fatalf("token database suffers unrecoverable "+
+				"error: %v", err)
+		}
+
+		go logWorker(conn, templateConfig, tdb)
 	}
 }

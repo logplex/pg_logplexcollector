@@ -29,7 +29,10 @@ veryclean: clean
 
 postgres: tmp/postgres/bin/pg_config
 pg_logfebe: tmp/postgres/lib/pg_logfebe.so
-testdb: tmp/testdb
+testdb: tmp/testdb tmp/tokens.new
+
+tmp/tokens.new:
+	echo '{"tokens": {"test identity": "test token"}}' > $@
 
 # Following targets copy and grab files
 
