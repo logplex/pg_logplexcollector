@@ -14,7 +14,7 @@ import (
 func TestVersionOK(t *testing.T) {
 	msgInit := func(dst *femebe.Message, exit exitFn) {
 		buf := bytes.Buffer{}
-		femebe.WriteCString(&buf, "PG9.2.2/1")
+		femebe.WriteCString(&buf, "PG-9.2.2/logfebe-1")
 
 		dst.InitFromBytes('V', buf.Bytes())
 	}

@@ -62,8 +62,8 @@ func processVerMsg(msgInit msgInit, exit exitFn) {
 		exit("couldn't read version string: %v", err)
 	}
 
-	if !strings.HasPrefix(s, "PG9.2.") ||
-		!strings.HasSuffix(s, "/1") {
+	if !strings.HasPrefix(s, "PG-9.2.") ||
+		!strings.HasSuffix(s, "/logfebe-1") {
 		exit("protocol version not supported: %s", s)
 	}
 }

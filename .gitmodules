@@ -4,3 +4,6 @@
 [submodule "src/logplexc"]
 	path = src/logplexc
 	url = https://github.com/fdr/logplexc.git
+[submodule "src/pg_logfebe"]
+	path = src/pg_logfebe
+	url = https://github.com/fdr/pg_logfebe.git

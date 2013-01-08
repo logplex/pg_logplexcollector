@@ -41,7 +41,7 @@ tmp/src/postgres/configure:
 	| tar x)
 
 tmp/src/pg_logfebe:
-	git clone https://github.com/fdr/pg_logfebe.git	tmp/src/pg_logfebe
+	cp -a src/pg_logfebe tmp/src/
 
 # Compilation-oriented targets
 
