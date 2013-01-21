@@ -135,7 +135,7 @@ func readUint64(r io.Reader) (ret uint64, err error) {
 }
 
 func parseLogRecord(
-	dst *logRecord, data []byte, exitFn func(args ...interface{})) {
+	dst *logRecord, data []byte, exit exitFn) {
 
 	buf := bytes.NewBuffer(data)
 
@@ -144,14 +144,14 @@ func parseLogRecord(
 	nextNullableString := func() *string {
 		np, err := femebe.ReadByte(buf)
 		if err != nil {
-			exitFn(err)
+			exit(err)
 		}
 
 		switch np {
 		case 'P':
 			s, err := femebe.ReadCString(buf)
 			if err != nil {
-				exitFn(err)
+				exit(err)
 			}
 
 			return &s
@@ -161,26 +161,27 @@ func parseLogRecord(
 			// must be consumed.
 			_, err := femebe.ReadCString(buf)
 			if err != nil {
-				exitFn(err)
+				exit(err)
 			}
 
 			return nil
 
 		default:
-			exitFn("Expected nullable string "+
+			exit("Expected nullable string "+
 				"control character, got %c", np)
 
 		}
 
-		exitFn("Prior switch should always return")
-		panic("exitFn should panic/return")
+		exit("Prior switch should always return")
+		panic("exit should panic/return, " +
+			"but the compiler doesn't know that")
 	}
 
 	// Read a non-nullable string from buf
 	nextString := func() string {
 		s, err := femebe.ReadCString(buf)
 		if err != nil {
-			exitFn(err)
+			exit(err)
 		}
 
 		return s
@@ -189,7 +190,7 @@ func parseLogRecord(
 	nextInt32 := func() int32 {
 		i32, err := femebe.ReadInt32(buf)
 		if err != nil {
-			exitFn(err)
+			exit(err)
 		}
 
 		return i32
@@ -198,7 +199,7 @@ func parseLogRecord(
 	nextInt64 := func() int64 {
 		i64, err := readInt64(buf)
 		if err != nil {
-			exitFn(err)
+			exit(err)
 		}
 
 		return i64
@@ -207,7 +208,7 @@ func parseLogRecord(
 	nextUint64 := func() uint64 {
 		ui64, err := readUint64(buf)
 		if err != nil {
-			exitFn(err)
+			exit(err)
 		}
 
 		return ui64
@@ -238,7 +239,7 @@ func parseLogRecord(
 	dst.ApplicationName = nextNullableString()
 
 	if buf.Len() != 0 {
-		exitFn("LogRecord message has mismatched "+
+		exit("LogRecord message has mismatched "+
 			"length header and cString contents: remaining %d",
 			buf.Len())
 	}
