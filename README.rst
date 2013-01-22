@@ -12,6 +12,13 @@ program with the most convenience by writing::
   $ git submodule update
   $ make
 
+Alternatively, if getting pg_logplexcollector for the first time, one
+can initialize submodules upon ``git clone`` and build by running::
+
+  $ git clone <pg_logplexcollector remote> --recursive
+  $ cd pg_logplexcollector
+  $ make
+
 This is because git submodules are used to version and retrieve other
 libraries, such as femebe and logplexc.  Having done this though, "go
 build" and "go install" should work without complaint.
