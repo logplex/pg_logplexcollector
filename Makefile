@@ -12,6 +12,7 @@ test:
 clean:
 	rm -f bin/pg_logplexcollector
 	rm -f bin/logplexd
+	GOPATH=`pwd` go clean pg_logplexcollector tool/logplexd femebe logplexc
 
 # Everything below here is a monstrous hack to make playing with the
 # toolchain a bit easier.  If one sets
