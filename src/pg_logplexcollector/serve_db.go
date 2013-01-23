@@ -1,49 +1,50 @@
-// A token data base is used by pg_logplexcollector to match a
-// client's self-described identity with a private piece of
-// information defined in the token file.
+// A serve data base is used by pg_logplexcollector to tell it what
+// sockets to listen on, what identification to expect on that socket,
+// and how to map the client's self-described identity with a private
+// logplex token defined in the serve file.
 //
-// Of particular importance is being able to learn new tokens when a
-// new file is provided at run-time, and ideally not crash the server
-// if an incorrect token file is encountered.
+// Of particular importance is being able to learn new serve records
+// when a new file is provided at run-time, and ideally not crash the
+// server if an incorrect serve file is encountered.
 //
-// To this end, the token database is a directory that may look like
+// To this end, the serve database is a directory that may look like
 // this:
 //
-//     tokendb
+//     servedb
 //     ├── last_error
-//     ├── tokens.loaded
-//     ├── tokens.new
-//     └── tokens.rej
+//     ├── serves.loaded
+//     ├── serves.new
+//     └── serves.rej
 //
 // The general idea is that another program may rename() (for
-// atomicity) a new token file into tokens.new.  Subsequently, any
+// atomicity) a new serve file into serves.new.  Subsequently, any
 // point, pg_logplexcollector may elect to read this file and, should
 // it be found valid, adhere to its new directives and write out a
-// *copy* to tokens.loaded, which may be monitored by any other
+// *copy* to serves.loaded, which may be monitored by any other
 // program on a read-only basis.  After this copy is complete,
-// tokens.new, any existing tokens.rej, and last_error is unlinked.
+// serves.new, any existing serves.rej, and last_error is unlinked.
 //
-// However, should pg_logplexcollector find the tokens.new file to be
+// However, should pg_logplexcollector find the serves.new file to be
 // invalid, it will write an error message to a newly created
-// last_error file and rename() the file to tokens.rej.
+// last_error file and rename() the file to serves.rej.
 //
 // The intention of copying the file when it is valid and renaming it
 // when it is not is so that it's much harder to write an accidentally
-// incorrect program with a dangling file handle to tokens.new to
-// corrupt tokens.loaded, causing confusion.  The intention of using
-// rename() to move tokens.new to tokens.rej is to allow external
+// incorrect program with a dangling file handle to serves.new to
+// corrupt serves.loaded, causing confusion.  The intention of using
+// rename() to move serves.new to serves.rej is to allow external
 // programs to easily determine if a change has been accepted or
 // rejected by the use of stat() information.
 //
-// tokens.new must have at least the following structure:
+// serves.new must have at least the following structure:
 //
-//     {"tokens": {
-//          "identity1": "token1",
-//          "identity2": "token2"
-//         }
+//     {"serves": [
+//	    {"i": "identity1": "t": "token1", "p": "/var/run/cluster1/log.sock"},
+//	    {"i": "identity2": "t": "token2", "p": "/var/run/cluster2/log.sock"}
+//	 ]
 //     }
 //
-// Any other auxiliary keys and values as siblings to the "tokens" key
+// Any other auxiliary keys and values as siblings to the "serves" key
 // are acceptable, and recommended for use for bookkeeping in other
 // programs.
 
@@ -58,16 +59,26 @@ import (
 	"sync"
 )
 
-type tokenDb struct {
+type sKey struct {
+	I string
+	P string
+}
+
+type serveRecord struct {
+	sKey
+	T string
+}
+
+type serveDb struct {
 	path string
 
 	// For safety under concurrent access
 	accessProtect sync.RWMutex
 
-	identToToken map[string]string
+	identToServe map[sKey]*serveRecord
 
 	// To control semantics of first Poll(), which may load
-	// tokens.loaded from a cold start.
+	// serves.loaded from a cold start.
 	beyondFirstTime bool
 }
 
@@ -81,75 +92,92 @@ type multiError struct {
 	nested error
 }
 
-func newTokenDb(path string) *tokenDb {
-	return &tokenDb{
+func newServeDb(path string) *serveDb {
+	return &serveDb{
 		path:         path,
-		identToToken: make(map[string]string),
+		identToServe: make(map[sKey]*serveRecord),
 	}
 }
 
-func (t *tokenDb) loadedPath() string {
-	return path.Join(t.path, "tokens.loaded")
+func (t *serveDb) loadedPath() string {
+	return path.Join(t.path, "serves.loaded")
 }
 
-func (t *tokenDb) newPath() string {
-	return path.Join(t.path, "tokens.new")
+func (t *serveDb) newPath() string {
+	return path.Join(t.path, "serves.new")
 }
 
-func (t *tokenDb) rejPath() string {
-	return path.Join(t.path, "tokens.rej")
+func (t *serveDb) rejPath() string {
+	return path.Join(t.path, "serves.rej")
 }
 
-func (t *tokenDb) errPath() string {
+func (t *serveDb) errPath() string {
 	return path.Join(t.path, "last_error")
 }
 
-func (t *tokenDb) Resolve(ident string) (string, bool) {
+func (t *serveDb) Snapshot() []serveRecord {
 	t.accessProtect.RLock()
 	defer t.accessProtect.RUnlock()
-	tok, ok := t.identToToken[ident]
 
-	return tok, ok
+	n := len(t.identToServe)
+	snap := make([]serveRecord, n, n)
+	i := 0
+
+	for _, v := range t.identToServe {
+		snap[i] = *v
+		i += 1
+	}
+
+	// Recheck in case of race conditions.  Array bounds checking
+	// can catch cases of accidental writes to t.identToServe
+	// while filling snap, may as well check for deletions causing
+	// under-filling much the same.
+	if i < len(snap) {
+		panic("race condition or bookkeeping error in t.identToServe")
+	}
+
+	return snap
 }
 
-func (t *tokenDb) protWrite(newMap map[string]string) {
+func (t *serveDb) protWrite(newMap map[sKey]*serveRecord) {
 	t.accessProtect.Lock()
 	defer t.accessProtect.Unlock()
 
-	t.identToToken = newMap
+	t.identToServe = newMap
 }
 
-func (t *tokenDb) pollFirstTime() error {
+func (t *serveDb) pollFirstTime() (bool, error) {
 	lp := t.loadedPath()
 	contents, err := ioutil.ReadFile(lp)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// old tokens.loaded doesn't exist: that's
+			// old serves.loaded doesn't exist: that's
 			// okay; it's just a fresh database.
-			return nil
-		} else {
-			return err
+			return true, nil
 		}
+
+		return true, err
 	}
 
 	newMapping, err := t.parse(contents)
 	if err != nil {
 		// The old 'loaded' mapping is thought to have been
 		// good, exit early if that is not true.
-		return err
+		return false, err
 	}
 
 	t.protWrite(newMapping)
 
-	return nil
+	return true, nil
 }
 
 // Poll for new routing information to load
-func (t *tokenDb) Poll() (err error) {
+func (t *serveDb) Poll() (newInfo bool, err error) {
 	// Handle first execution on creation of the db instance.
 	if !t.beyondFirstTime {
-		if err = t.pollFirstTime(); err != nil {
-			return err
+		newInfo, err = t.pollFirstTime()
+		if err != nil {
+			return false, err
 		}
 
 		t.beyondFirstTime = true
@@ -159,14 +187,15 @@ func (t *tokenDb) Poll() (err error) {
 	contents, err := ioutil.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
+
 			// This is the most common branch, where no
-			// tokens.new file has been provided for
+			// serves.new file has been provided for
 			// loading.  Being that, silence the error.
-			return nil
+			return newInfo || false, nil
 		}
 
 		// Had some problems reading an existing file.
-		return err
+		return newInfo || false, err
 	}
 
 	// Validate that the JSON is in the expected format.
@@ -174,7 +203,7 @@ func (t *tokenDb) Poll() (err error) {
 	if nonfatale != nil {
 		// Nope, can't understand the passed JSON, reject it.
 		if err := t.reject(p, nonfatale); err != nil {
-			return multiError{error: err, nested: nonfatale}
+			return newInfo || false, multiError{error: err, nested: nonfatale}
 		}
 
 		// Rejection went okay: that's not considered an error
@@ -183,17 +212,17 @@ func (t *tokenDb) Poll() (err error) {
 		// errors, which otherwise tend to arise from serious
 		// conditions preventing data base manipulation like
 		// "out of disk".
-		return nil
+		return newInfo || false, nil
 	}
 
-	// The new token mapping was loaded successfully: before
+	// The new serve mapping was loaded successfully: before
 	// installing it reflect its state in the data base first, so
 	// a crash will yield the new state rather than the old one.
 	if err := t.persistLoaded(contents); err != nil {
-		return err
+		return newInfo || false, err
 	}
 
-	// Remove last_error and tokens.rej file as the persistence
+	// Remove last_error and serves.rej file as the persistence
 	// has gone well.  As these files are somewhat advisory, don't
 	// consider it a failure if such removals do not succeed.
 	os.Remove(t.errPath())
@@ -202,7 +231,7 @@ func (t *tokenDb) Poll() (err error) {
 	// Commit to the new mappings in this session.
 	t.protWrite(newMapping)
 
-	return nil
+	return true, nil
 }
 
 // Persist the verified contents, which are presumed valid.
@@ -210,7 +239,7 @@ func (t *tokenDb) Poll() (err error) {
 // This is done carefully through temporary files and renames for
 // reasons of atomicity, and with both file and directory flushing for
 // durability.
-func (t *tokenDb) persistLoaded(contents []byte) (err error) {
+func (t *serveDb) persistLoaded(contents []byte) (err error) {
 	// Get a file descriptor for the directory before doing
 	// anything too complex, because it's necessary for this to
 	// succeed before being able to process Sync() requests.
@@ -260,7 +289,7 @@ func (t *tokenDb) persistLoaded(contents []byte) (err error) {
 	}
 
 	// Move the temporary file into place
-	err = os.Rename(tempf.Name(), path.Join(t.path, "tokens.loaded"))
+	err = os.Rename(tempf.Name(), path.Join(t.path, "serves.loaded"))
 	if err != nil {
 		return err
 	}
@@ -275,7 +304,7 @@ func (t *tokenDb) persistLoaded(contents []byte) (err error) {
 		return err
 	}
 
-	// Purge submitted token file, as it has been accepted and
+	// Purge submitted serve file, as it has been accepted and
 	// copied.
 	err = os.Remove(t.newPath())
 	if err != nil {
@@ -291,7 +320,7 @@ func (t *tokenDb) persistLoaded(contents []byte) (err error) {
 	return nil
 }
 
-func (t *tokenDb) reject(submitPath string, nonfatale error) (err error) {
+func (t *serveDb) reject(submitPath string, nonfatale error) (err error) {
 	// Perform move to the rejection file
 	err = os.Rename(submitPath, t.rejPath())
 	if err != nil {
@@ -312,7 +341,50 @@ func (t *tokenDb) reject(submitPath string, nonfatale error) (err error) {
 	return nil
 }
 
-func (t *tokenDb) parse(contents []byte) (map[string]string, error) {
+func projectFromJson(v interface{}) (*serveRecord, error) {
+	maybeMap, ok := v.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf(
+			"expected a JSON map for in the \"serve\" list, "+
+				"instead received %v", v)
+	}
+
+	lookup := func(key string) (string, error) {
+		ms, ok := maybeMap[key]
+		if !ok {
+			return "", fmt.Errorf("did not receive an expected "+
+				"(\"%s\") key in serve record", key)
+		}
+
+		s, ok := ms.(string)
+		if !ok {
+			return "", fmt.Errorf("expected string value for key "+
+				"(\"%s\") key in serve record", key)
+		}
+
+		return s, nil
+	}
+
+	path, err := lookup("p")
+	if err != nil {
+		return nil, err
+	}
+
+	tok, err := lookup("t")
+	if err != nil {
+		return nil, err
+	}
+
+	ident, err := lookup("i")
+	if err != nil {
+		return nil, err
+	}
+
+	return &serveRecord{sKey: sKey{P: path, I: ident},
+		T: tok}, nil
+}
+
+func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {
 	filled := make(map[string]interface{})
 	filledp := &filled
 	err := json.Unmarshal(contents, filledp)
@@ -325,27 +397,26 @@ func (t *tokenDb) parse(contents []byte) (map[string]string, error) {
 			"expected JSON dictionary, got JSON null")
 	}
 
-	maybeTokenMap := filled["tokens"]
-	maybeDict, ok := maybeTokenMap.(map[string]interface{})
+	maybeServeValue := filled["serves"]
+	maybeList, ok := maybeServeValue.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("Expected 'tokens' key to contain "+
-			"a JSON dictionary, instead it contains %T",
-			maybeTokenMap)
+		return nil, fmt.Errorf("Expected 'serves' key to contain "+
+			"a JSON list, instead it contains %T",
+			maybeServeValue)
 	}
 
 	// Fill a new mapping, optimistic that the input is correct,
 	// but abort if a non-JSON string is found on the
-	// right-hand-side of the dictionary, where the token value
+	// right-hand-side of the dictionary, where the serve value
 	// ought to be.
-	newMapping := make(map[string]string)
-	for ident, maybeTok := range maybeDict {
-		tok, ok := maybeTok.(string)
-		if !ok {
-			return nil, fmt.Errorf("Expected string for token "+
-				"value, instead received type %T", maybeTok)
+	newMapping := make(map[sKey]*serveRecord)
+	for _, val := range maybeList {
+		rec, err := projectFromJson(val)
+		if err != nil {
+			return nil, err
 		}
 
-		newMapping[ident] = tok
+		newMapping[rec.sKey] = rec
 	}
 
 	return newMapping, nil

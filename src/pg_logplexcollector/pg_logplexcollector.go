@@ -39,6 +39,9 @@ type exitFn func(args ...interface{})
 // the filled message.
 type msgInit func(dst *femebe.Message, exit exitFn)
 
+// Used only in the close-to-broadcast style to exit goroutines.
+type dieCh <-chan struct{}
+
 // Read the version message, calling exit if this is not a supported
 // version.
 func processVerMsg(msgInit msgInit, exit exitFn) {
@@ -96,10 +99,19 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 }
 
 // Process a log message, sending it to the client.
-func processLogMsg(lpc *logplexc.Client, msgInit msgInit, exit exitFn) {
+func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
+	exit exitFn) {
 	var m femebe.Message
 
 	for {
+		// Poll request to exit
+		select {
+		case <-die:
+			return
+		default:
+			break
+		}
+
 		msgInit(&m, exit)
 
 		// Refuse to handle any log message above an arbitrary
@@ -156,20 +168,10 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
 	}
 }
 
-func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config, tdb *tokenDb) {
-	var m femebe.Message
+func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
+	sr *serveRecord) {
 	var err error
 	stream := femebe.NewServerMessageStream("", rwc)
-
-	// Exit in an orderly manner if (and only if) exit() is
-	// called; otherwise propagate the panic normally.
-	defer func() {
-		rwc.Close()
-
-		if r := recover(); r != nil && r != &m {
-			panic(r)
-		}
-	}()
 
 	var exit exitFn
 	exit = func(args ...interface{}) {
@@ -185,8 +187,20 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config, tdb *tokenDb) {
 			}
 		}
 
-		panic(&m)
+		panic(&exit)
 	}
+
+	// Recovers from panic and exits in an orderly manner if (and
+	// only if) exit() is called; otherwise propagate the panic
+	// normally.
+	defer func() {
+		rwc.Close()
+
+		// &exit is used as a sentinel value.
+		if r := recover(); r != nil && r != &exit {
+			panic(r)
+		}
+	}()
 
 	var msgInit msgInit
 	msgInit = func(m *femebe.Message, exit exitFn) {
@@ -203,14 +217,14 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config, tdb *tokenDb) {
 	ident := processIdentMsg(msgInit, exit)
 	log.Printf("client connects with identifier %q", ident)
 
-	// Resolve the identifier to a token
-	tok, ok := tdb.Resolve(ident)
-	if !ok {
-		exit("could not resolve identifier to token: %q", ident)
+	// Resolve the identifier to a serve
+	if sr.I != ident {
+		exit("got unexpected identifier for socket: "+
+			"path %s, expected %s, got %s", sr.P, sr.I, ident)
 	}
 
-	// Set up client with token
-	cfg.Token = tok
+	// Set up client with serve
+	cfg.Token = sr.T
 	client, err := logplexc.NewClient(&cfg)
 	if err != nil {
 		exit(err)
@@ -218,13 +232,68 @@ func logWorker(rwc io.ReadWriteCloser, cfg logplexc.Config, tdb *tokenDb) {
 
 	defer client.Close()
 
-	processLogMsg(client, msgInit, exit)
+	processLogMsg(die, client, msgInit, exit)
+}
+
+func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {
+	// Begin listening
+	l, err := net.Listen("unix", sr.P)
+	if err != nil {
+		log.Fatalf(
+			"exiting, cannot listen to %q: %v",
+			sr.P, err)
+	}
+
+	// Create a template config in each listening goroutine, for a
+	// tiny bit more defensive programming against accidental
+	// mutations of the base template that could cause
+	// cross-tenant spillage.
+	client := *http.DefaultClient
+	client.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
+	templateConfig := logplexc.Config{
+		Logplex:            logplexUrl,
+		HttpClient:         client,
+		RequestSizeTrigger: 100 * KB,
+		Concurrency:        3,
+		Period:             3 * time.Second,
+
+		// Set at connection start-up when the client
+		// self-identifies.
+		Token: "",
+	}
+
+	for {
+		select {
+		case <-die:
+			log.Print("listener exits normally from die request")
+			return
+		default:
+			break
+		}
+
+		conn, err := l.Accept()
+		if err != nil {
+			log.Printf("accept error: %v", err)
+		}
+
+		if err != nil {
+			log.Fatalf("serve database suffers unrecoverable "+
+				"error: %v", err)
+		}
+
+		go logWorker(die, conn, templateConfig, sr)
+	}
 }
 
 func main() {
 	// Input checking
-	if len(os.Args) != 2 {
-		log.Printf("Usage: pg_logplexcollector LISTENADDR\n")
+	if len(os.Args) != 1 {
+		log.Printf("Usage: pg_logplexcollector\n")
 		os.Exit(1)
 	}
 
@@ -256,65 +325,51 @@ func main() {
 			os.Getenv("LOGPLEX_URL"))
 	}
 
-	// Set up token database and perform its input checking
-	tdbDir := os.Getenv("TOKEN_DB_DIR")
-	if tdbDir == "" {
-		log.Fatal("TOKEN_DB_DIR is unset: it must have the value " +
-			"of an existing token database.  " +
+	// Set up serve database and perform its input checking
+	sdbDir := os.Getenv("SERVE_DB_DIR")
+	if sdbDir == "" {
+		log.Fatal("SERVE_DB_DIR is unset: it must have the value " +
+			"of an existing serve database.  " +
 			"This can be an be an empty directory.")
 	}
 
-	tdb := newTokenDb(tdbDir)
-	err = tdb.Poll()
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Fatal("TOKEN_DB_DIR is set to a non-existant "+
-				"directory: %v", err)
-		}
+	sdb := newServeDb(sdbDir)
 
-		log.Fatalf("token database suffers an unrecoverable error: %v",
-			err)
-	}
-
-	client := *http.DefaultClient
-	client.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-
-	templateConfig := logplexc.Config{
-		Logplex:            *logplexUrl,
-		HttpClient:         client,
-		RequestSizeTrigger: 100 * KB,
-		Concurrency:        3,
-		Period:             3 * time.Second,
-
-		// Set at connection start-up when the client
-		// self-identifies.
-		Token: "",
-	}
-
-	// Begin listening
-	l, err := net.Listen("unix", os.Args[1])
-	if err != nil {
-		log.Fatalf(
-			"exiting, cannot listen to %q: %v",
-			os.Args[1], err)
-	}
+	var die chan struct{} = make(chan struct{})
 
 	for {
-		conn, err := l.Accept()
+		nw, err := sdb.Poll()
 		if err != nil {
-			log.Printf("accept error: %v", err)
+			if os.IsNotExist(err) {
+				log.Fatal("SERVE_DB_DIR is set to a non-existant "+
+					"directory: %v", err)
+			}
+
+			log.Fatalf(
+				"serve database suffers an unrecoverable error: %v",
+				err)
 		}
 
-		err = tdb.Poll()
-		if err != nil {
-			log.Fatalf("token database suffers unrecoverable "+
-				"error: %v", err)
+		// New database state discovered: refresh the
+		// listeners and signal all existing server goroutines
+		// to exit.
+		if nw {
+			// Tell the generation of goroutines from the
+			// last version of the database to die.
+			close(die)
+
+			// A new channel value for a new generation of
+			// listen/accept goroutines
+			die = make(chan struct{})
+
+			// Set up new servers for the new database state.
+			snap := sdb.Snapshot()
+			for i := range snap {
+				os.Remove(snap[i].P)
+				go listen(die, *logplexUrl, &snap[i])
+			}
 		}
 
-		go logWorker(conn, templateConfig, tdb)
+		time.Sleep(10 * time.Second)
 	}
 }

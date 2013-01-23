@@ -36,8 +36,7 @@ everything into a subdirectory ``tmp``::
   https://127.0.0.1:44786 # (dynamically generated)
 
   $ LOGPLEX_URL=https://127.0.0.1:44786 \
-    TOKEN_DB_DIR=tmp			\
-    ./bin/pg_logplexcollector tmp/testdb/log.sock
+    SERVE_DB_DIR=tmp			\
 
   $ ./tmp/postgres/bin/postgres -D tmp/testdb
 
@@ -89,45 +88,52 @@ relatively harmless to start Postgres at this point if
 pg_logplexcollector
 ===================
 
-Configuring ``pg_logplexcollector`` consists of three concepts:
+Configuring ``pg_logplexcollector`` consists of two concepts:
 
 * LOGPLEX_URL: What logplex service to submit HTTP POSTs to.
 
-* unix socket path: Where to listen for incoming ``pg_logfebe``
-  connections.
+* SERVE_DB_DIR: What directory contains the 'serve database'
 
-* TOKEN_DB_DIR: What directory contains the 'token database'
+SERVE_DB_DIR deserves more explanation:
 
-TOKEN_DB_DIR deserves more explanation:
+In order to preserve the secrecy of logplex tokens and provide greater
+security for tenants, ``pg_logplexcollector`` ties together three
+pieces of information:
 
-In order to preserve the secrecy of logplex tokens, a mapping between
-``pg_logfebe.identity`` and a logplex token must be established.  This
-is done by writing a JSON file into ``$TOKEN_DB_DIR/tokens.new`` that
-looks like this::
+* A non-secret identity (configured in ``postgresql.conf`` with the
+  GUC ``pg_logfebe.identity``)
 
-    {"tokens": {"a-logging-identity": "t.a-logplex-token",
-		"another-logging-identity": "t.another-logplex-token"}}
+* A secret logplex token
 
-An identity *must* appear in this mapping to have its connection
-accepted by ``pg_logplexcollector``.
+* A specific unix socket that will only accept connections for a given
+  identity.
 
-One can confirm that the ``tokens.new`` file has been loaded by
-watching it be copied to ``$TOKEN_DB_DIR/tokens.loaded``.  At that
-time, ``tokens.new``, and any existing ``tokens.rej`` or
+This is done by writing a JSON file into ``$SERVE_DB_DIR/serves.new``
+that looks like this::
+
+    {"serves": [
+        {"i": "identity-1", "t": "token-1", "p": "/path/unix.socket-1"},
+        {"i": "identity-2", "t": "token-2", "p": "/path/unix.socket-2"}
+      ]
+    }
+
+One can confirm that the ``serves.new`` file has been loaded by
+watching it be copied to ``$SERVE_DB_DIR/serves.loaded``.  At that
+time, ``serves.new``, and any existing ``serves.rej`` or
 ``last_error`` file, if any, will be removed.
 
-If one submits invalid input, ``tokens.new`` is removed and
-``tokens.rej`` and a ``last_error`` file are emitted for inspection.
-``tokens.loaded`` does not change in this case.
+If one submits invalid input, ``serves.new`` is removed and
+``serves.rej`` and a ``last_error`` file are emitted for inspection.
+``serves.loaded`` does not change in this case.
 
-``pg_logplexcollector`` will check for ``tokens.new`` at various
-arbitrary times.  Right now it occurs every time a client connects.
+``pg_logplexcollector`` will check for ``serves.new`` at various
+arbitrary times.  Right now it occurs every ten seconds.
 
 Putting these together, an invocation of ``pg_logplexcollector`` looks
 like this::
 
-    $ TOKEN_DB_DIR=/path/to/db LOGPLEX_URL=https://somewhere.com/logs \
-      ./pg_logplexcollector /path/to/listenaddr.sock
+    $ SERVE_DB_DIR=/path/to/servedb LOGPLEX_URL=https://somewhere.com/logs \
+      ./pg_logplexcollector
 
 ``pg_logplexcollector`` logs client connections, disconnections, and
 errors.  The former is to help determine if one's configuration is

@@ -30,10 +30,10 @@ veryclean: clean
 
 postgres: tmp/postgres/bin/pg_config
 pg_logfebe: tmp/postgres/lib/pg_logfebe.so
-testdb: tmp/testdb tmp/tokens.new
+testdb: tmp/testdb tmp/serves.new
 
-tmp/tokens.new:
-	echo '{"tokens": {"test identity": "test token"}}' > $@
+tmp/serves.new:
+	printf '{"serves": [{"i": "test identity", "t": "test token", "p": "%s"}]}\n' `pwd`/tmp/testdb/log.sock > $@
 
 # Following targets copy and grab files
 
