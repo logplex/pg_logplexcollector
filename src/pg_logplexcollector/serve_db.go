@@ -203,7 +203,10 @@ func (t *serveDb) Poll() (newInfo bool, err error) {
 	if nonfatale != nil {
 		// Nope, can't understand the passed JSON, reject it.
 		if err := t.reject(p, nonfatale); err != nil {
-			return newInfo || false, multiError{error: err, nested: nonfatale}
+			return newInfo || false, multiError{
+				error:  err,
+				nested: nonfatale,
+			}
 		}
 
 		// Rejection went okay: that's not considered an error
