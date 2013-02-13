@@ -244,6 +244,25 @@ func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {
 			sr.P, err)
 	}
 
+	// Make world-writable so anything can connect and send logs.
+	// This may be be worth locking down more, but as-is unless
+	// pg_logplexcollector and the Postgres server share the same
+	// running user common umasks will be useless.
+	fi, err := os.Stat(sr.P)
+	if err != nil {
+		log.Fatalf(
+			"exiting, cannot stat just creatd socket %q: %v",
+			sr.P, err)
+	}
+
+	err = os.Chmod(sr.P, fi.Mode().Perm()|0222)
+	if err != nil {
+		log.Fatalf(
+			"exiting, cannot make just created socket "+
+				"world-writable %q: %v",
+			sr.P, err)
+	}
+
 	// Create a template config in each listening goroutine, for a
 	// tiny bit more defensive programming against accidental
 	// mutations of the base template that could cause
