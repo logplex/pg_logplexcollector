@@ -41,7 +41,7 @@ tmp/src/postgres/configure:
 	mkdir -p tmp/src
 	(cd tmp/src && \
 	 git archive --remote=$(PGSRC) --prefix='postgres/' \
-	   REL9_2_2 --prefix='postgres/' \
+	   REL9_2_3 --prefix='postgres/' \
 	| tar x)
 
 tmp/src/pg_logfebe:
