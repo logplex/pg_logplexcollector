@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -161,7 +162,9 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
 	catOptionalField("Hint", lr.ErrHint)
 	catOptionalField("Query", lr.UserQuery)
 
-	err := lpc.BufferMessage(time.Now(), "postgres-"+lr.SessionId,
+	err := lpc.BufferMessage(time.Now(),
+		"postgres",
+		"postgres."+strconv.Itoa(int(lr.Pid)),
 		msgFmtBuf.Bytes())
 	if err != nil {
 		exit(err)
