@@ -282,7 +282,7 @@ func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {
 		HttpClient:         client,
 		RequestSizeTrigger: 100 * KB,
 		Concurrency:        3,
-		Period:             3 * time.Second,
+		Period:             time.Second / 4,
 
 		// Set at connection start-up when the client
 		// self-identifies.
