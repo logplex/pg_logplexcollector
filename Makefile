@@ -33,7 +33,7 @@ pg_logfebe: tmp/postgres/lib/pg_logfebe.so
 testdb: tmp/testdb tmp/serves.new
 
 tmp/serves.new:
-	printf '{"serves": [{"i": "test identity", "t": "test token", "p": "%s"}]}\n' `pwd`/tmp/testdb/log.sock > $@
+	printf '{"serves": [{"i": "test identity", "t": "test token", "p": "%s", "name": "humanname"}]}\n' `pwd`/tmp/testdb/log.sock > $@
 
 # Following targets copy and grab files
 

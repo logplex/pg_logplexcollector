@@ -101,7 +101,7 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 
 // Process a log message, sending it to the client.
 func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
-	exit exitFn) {
+	sr *serveRecord, exit exitFn) {
 	var m femebe.Message
 
 	for {
@@ -134,13 +134,14 @@ func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
 
 		var lr logRecord
 		parseLogRecord(&lr, payload, exit)
-		processLogRec(&lr, lpc, exit)
+		processLogRec(&lr, lpc, sr, exit)
 	}
 }
 
 // Process a single logRecord value, buffering it in the logplex
 // client.
-func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
+func processLogRec(lr *logRecord, lpc *logplexc.Client, sr *serveRecord,
+	exit exitFn) {
 	// Buffer to format the complete log message in.
 	msgFmtBuf := bytes.Buffer{}
 
@@ -155,6 +156,13 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, exit exitFn) {
 			msgFmtBuf.WriteString(*maybePresent)
 			msgFmtBuf.WriteByte('\n')
 		}
+	}
+
+	if sr.Name != "" {
+		// If available, identify what agent is doing the
+		// logging to aid human readers in determining where a
+		// log message came from.
+		msgFmtBuf.WriteString("[" + sr.Name + "] ")
 	}
 
 	catOptionalField("", lr.ErrMessage)
@@ -235,7 +243,7 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 
 	defer client.Close()
 
-	processLogMsg(die, client, msgInit, exit)
+	processLogMsg(die, client, msgInit, sr, exit)
 }
 
 func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {

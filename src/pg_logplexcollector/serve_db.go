@@ -67,6 +67,9 @@ type sKey struct {
 type serveRecord struct {
 	sKey
 	T string
+
+	// Auxiliary fields for formatting
+	Name string
 }
 
 type serveDb struct {
@@ -383,8 +386,11 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 		return nil, err
 	}
 
+	// Optional fields: okay to not explode if not present.
+	name, _ := lookup("name")
+
 	return &serveRecord{sKey: sKey{P: path, I: ident},
-		T: tok}, nil
+		T: tok, Name: name}, nil
 }
 
 func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {
