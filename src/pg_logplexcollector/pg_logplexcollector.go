@@ -190,7 +190,7 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 			log.Printf("Disconnect client: %v", args[0])
 		} else if len(args) > 1 {
 			if s, ok := args[0].(string); ok {
-				log.Printf(s, args[1:])
+				log.Printf(s, args[1:]...)
 			} else {
 				// Not an intended use case, but do
 				// one's best to print something.
