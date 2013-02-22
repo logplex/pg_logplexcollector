@@ -367,6 +367,11 @@ func main() {
 
 	var die chan struct{} = make(chan struct{})
 
+	// Brutal hack to get around pathological Go use of virtual
+	// memory: die once in a while.  A supervisor (e.g. Upstart)
+	// should restart the process.
+	deathClock := time.Now().Add(time.Hour)
+
 	for {
 		nw, err := sdb.Poll()
 		if err != nil {
@@ -401,5 +406,11 @@ func main() {
 		}
 
 		time.Sleep(10 * time.Second)
+
+		if time.Now().After(deathClock) {
+			log.Printf("Exiting on account of deadline, "+
+				"to prevent memory bloat: %v", deathClock)
+			os.Exit(101)
+		}
 	}
 }
