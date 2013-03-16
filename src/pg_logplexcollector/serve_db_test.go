@@ -34,8 +34,10 @@ var fixtures = []fixturePair{
 			`{"i": "banana", "t": "vanilla", ` +
 			`"p": "/p2/log.sock"}]}`),
 		triplets: []serveRecord{
-			{sKey{I: "apple", P: "/p1/log.sock"}, "chocolate"},
-			{sKey{I: "banana", P: "/p2/log.sock"}, "vanilla"},
+			{sKey{I: "apple", P: "/p1/log.sock"}, "chocolate",
+				"brown"},
+			{sKey{I: "banana", P: "/p2/log.sock"}, "vanilla",
+				"white"},
 		},
 	},
 	{
@@ -46,9 +48,9 @@ var fixtures = []fixturePair{
 			`"p": "/p2/log.sock"}]}`),
 		triplets: []serveRecord{
 			{sKey{I: "bed", P: "/p1/log.sock"},
-				"pillow"},
+				"pillow", "white"},
 			{sKey{I: "nightstand", P: "/p2/log.sock"},
-				"alarm clock"},
+				"alarm clock", "black"},
 		},
 	},
 }
