@@ -91,11 +91,11 @@ pg_logplexcollector
 
 Configuring ``pg_logplexcollector`` consists of two concepts:
 
-* LOGPLEX_URL: What logplex service to submit HTTP POSTs to.
+* ``LOGPLEX_URL``: What logplex service to submit HTTP POSTs to.
 
-* SERVE_DB_DIR: What directory contains the 'serve database'
+* ``SERVE_DB_DIR``: What directory contains the 'serve database'
 
-SERVE_DB_DIR deserves more explanation:
+``SERVE_DB_DIR`` deserves more explanation:
 
 In order to preserve the secrecy of logplex tokens and provide greater
 security for tenants, ``pg_logplexcollector`` ties together three
