@@ -68,7 +68,7 @@ developer package from a distributor, such as the
 Having done this, configure postgresql.conf with something like the
 following::
 
-  shared_preload_libraries='pg_logfebe'
+  shared_preload_libraries = 'pg_logfebe'
   logfebe.unix_socket = '/tmp/log.sock'
   logfebe.identity = 'a-logging-identity'
 
