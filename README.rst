@@ -20,8 +20,9 @@ can initialize submodules upon ``git clone`` and build by running::
   $ make
 
 This is because git submodules are used to version and retrieve other
-libraries, such as femebe and logplexc.  Having done this though, "go
-build" and "go install" should work without complaint.
+libraries, such as femebe and logplexc.  Having done this though,
+``make all`` (or just ``make``) will produce binaries in the ``bin``
+directory.
 
 Quick Demo Setup
 ================
