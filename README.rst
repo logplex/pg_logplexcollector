@@ -3,7 +3,7 @@ pg_logplexcollector
 
 This implements a tool to accept the protocol emitted by `pg_logfebe`_
 (version ``PG-9.2.x/logfebe-1``) and send it to logplex_ using the
-library ``logplexc``.
+library logplexc_.
 
 It is necessary to download submodules and set GOPATH to build the
 program with the most convenience by writing::
@@ -148,6 +148,8 @@ Open Issues
 
 * Log formatting is not designed at all: it's just the first thing
   anyone has implemented.
+
+.. _logplexc: https://github.com/fdr/logplexc
 
 .. _pg_logfebe: https://github.com/fdr/pg_logfebe
 
