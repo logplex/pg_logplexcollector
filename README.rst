@@ -38,6 +38,7 @@ everything into a subdirectory ``tmp``::
 
   $ LOGPLEX_URL=https://127.0.0.1:44786 \
     SERVE_DB_DIR=tmp			\
+    ./bin/pg_logplexcollector
 
   $ ./tmp/postgres/bin/postgres -D tmp/testdb
 
