@@ -2,8 +2,7 @@ pg_logplexcollector
 -------------------
 
 This implements a tool to accept the protocol emitted by `pg_logfebe`_
-(version ``PG-9.2.x/logfebe-1``) and send it to logplex_ using the
-library logplexc_.
+and send it to logplex_ using the library logplexc_.
 
 It is necessary to download submodules and set GOPATH to build the
 program with the most convenience by writing::
