@@ -11,49 +11,32 @@ import (
 	"testing"
 )
 
-func TestVersionOK(t *testing.T) {
-	msgInit := func(dst *femebe.Message, exit exitFn) {
-		buf := bytes.Buffer{}
-		femebe.WriteCString(&buf, "PG-9.2.2/logfebe-1")
-
-		dst.InitFromBytes('V', buf.Bytes())
-	}
-
-	exit := func(args ...interface{}) {
-		t.Fatal("Ver Message is thought to be well formed. " +
-			"Invariant broken.")
-	}
-
-	processVerMsg(msgInit, exit)
+var versionCheckTests = []struct{
+	Version string
+	Ok bool
+}{
+	{"PG-9.2.2/logfebe-1", true},
+	{"PG-9.3.0/logfebe-1", true},
+	{"PG7.4.15/1", false},
 }
 
-func TestVersionBadValue(t *testing.T) {
-	msgInit := func(dst *femebe.Message, exit exitFn) {
-		buf := bytes.Buffer{}
-		femebe.WriteCString(&buf, "PG7.4.15/1")
-
-		dst.InitFromBytes('V', buf.Bytes())
-	}
-
-	sentinel := &msgInit
-
-	exit := func(args ...interface{}) {
-		// Because this kind of error simply reports a string (with no
-		// type taxonomy to go with it), and that seems good enough,
-		// elide confirming precisely what the error is.
-		panic(sentinel)
-	}
-
-	defer func() {
-		if r := recover(); r != nil && r != sentinel {
-			t.Fatal("Paniced, but not with the sentinel value")
+func TestVersionCheck(t *testing.T) {
+	for i, tt := range versionCheckTests {
+		msgInit := func(dst *femebe.Message, exit exitFn) {
+			buf := bytes.Buffer{}
+			femebe.WriteCString(&buf, tt.Version)
+			dst.InitFromBytes('V', buf.Bytes())
 		}
 
-		// Success
-	}()
-
-	processVerMsg(msgInit, exit)
-	t.Fatal("Message should call exit, aborting execution before this")
+		ok := true
+		onBadVersion := func(args ...interface{}) {
+			ok = false
+		}
+		processVerMsg(msgInit, onBadVersion)
+		if ok != tt.Ok {
+			t.Errorf("%i: Ver Message well formed: %v; want %v", i, ok, tt.Ok)
+		}
+	}
 }
 
 func TestVersionMsgInitErr(t *testing.T) {
