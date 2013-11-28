@@ -3,7 +3,7 @@
 	url = https://github.com/deafbybeheading/femebe.git
 [submodule "src/logplexc"]
 	path = src/logplexc
-	url = https://github.com/fdr/logplexc.git
+	url = https://github.com/logplex/logplexc.git
 [submodule "src/pg_logfebe"]
 	path = src/pg_logfebe
-	url = https://github.com/fdr/pg_logfebe.git
+	url = https://github.com/logplex/pg_logfebe.git
