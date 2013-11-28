@@ -150,8 +150,8 @@ Open Issues
 * Log formatting is not designed at all: it's just the first thing
   anyone has implemented.
 
-.. _logplexc: https://github.com/fdr/logplexc
+.. _logplexc: https://github.com/logplex/logplexc
 
-.. _pg_logfebe: https://github.com/fdr/pg_logfebe
+.. _pg_logfebe: https://github.com/logplex/pg_logfebe
 
 .. _logplex: https://github.com/heroku/logplex
