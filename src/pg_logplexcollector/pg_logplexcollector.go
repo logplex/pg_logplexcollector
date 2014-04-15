@@ -218,7 +218,7 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 	msgInit = func(m *femebe.Message, exit exitFn) {
 		err = stream.Next(m)
 		if err == io.EOF {
-			exit("client disconnects")
+			exit("postgres client disconnects")
 		} else if err != nil {
 			exit("could not read next message: %v", err)
 		}
@@ -242,7 +242,10 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 		exit(err)
 	}
 
-	defer client.Close()
+	defer func() {
+		client.Close()
+		log.Printf("logplex client shuts down, statistics: %#v", client.Stats)
+	}()
 
 	processLogMsg(die, client, msgInit, sr, exit)
 }
