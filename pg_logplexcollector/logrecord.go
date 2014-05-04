@@ -3,9 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"femebe"
 	"fmt"
 	"io"
+
+	"github.com/deafbybeheading/femebe"
 )
 
 type logRecord struct {

@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
-	"femebe"
 	"io"
 	"log"
-	"logplexc"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/deafbybeheading/femebe"
+	"github.com/logplex/logplexc"
 )
 
 const (

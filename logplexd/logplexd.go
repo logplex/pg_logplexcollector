@@ -22,14 +22,13 @@ func (*LogplexPrint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Respond saying everything is OK.
 	w.WriteHeader(http.StatusNoContent)
-
 }
 
 func main() {
 	s := httptest.NewTLSServer(&LogplexPrint{})
 	fmt.Println(s.URL)
 
-	// Signal handling: 
+	// Signal handling:
 	sigch := make(chan os.Signal)
 	signal.Notify(sigch, os.Interrupt, os.Kill)
 	for sig := range sigch {

@@ -7,8 +7,9 @@ package main
 import (
 	"bytes"
 	"errors"
-	"femebe"
 	"testing"
+
+	"github.com/deafbybeheading/femebe"
 )
 
 var versionCheckTests = []struct {
@@ -36,7 +37,7 @@ func TestVersionCheck(t *testing.T) {
 		}
 		processVerMsg(msgInit, onBadVersion)
 		if ok != tt.Ok {
-			t.Errorf("%i: Ver Message well formed: %v; want %v",
+			t.Errorf("%d: Ver Message well formed: %v; want %v",
 				i, ok, tt.Ok)
 		}
 	}
