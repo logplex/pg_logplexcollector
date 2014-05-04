@@ -1,0 +1,17 @@
+{
+	"ImportPath": "github.com/logplex/pg_logplexcollector",
+	"GoVersion": "devel +f8b50ad4cac4 Mon Apr 21 17:00:27 2014 -0700 +",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/deafbybeheading/femebe",
+			"Rev": "a16013300c693b1d8f10c766b2185dcbd7dbbd3e"
+		},
+		{
+			"ImportPath": "github.com/logplex/logplexc",
+			"Rev": "2180ec7d8e887d3fde2f7a28ee315baaf2ac0c8d"
+		}
+	]
+}

@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
-	"femebe"
 	"io"
 	"log"
-	"logplexc"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/deafbybeheading/femebe"
+	"github.com/logplex/logplexc"
 )
 
 const (
@@ -266,7 +267,7 @@ func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {
 	fi, err := os.Stat(sr.P)
 	if err != nil {
 		log.Fatalf(
-			"exiting, cannot stat just creatd socket %q: %v",
+			"exiting, cannot stat just created socket %q: %v",
 			sr.P, err)
 	}
 

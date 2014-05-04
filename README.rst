@@ -4,42 +4,39 @@ pg_logplexcollector
 This implements a tool to accept the protocol emitted by `pg_logfebe`_
 and send it to logplex_ using the library logplexc_.
 
-It is necessary to download submodules and set GOPATH to build the
-program with the most convenience by writing::
+This project uses Godep_ to manage dependencies. One can install it
+via::
 
-  $ git submodule init
-  $ git submodule update
-  $ make
+  $ go get github.com/tools/godep
 
-Alternatively, if getting pg_logplexcollector for the first time, one
-can initialize submodules upon ``git clone`` and build by running::
+Having done that, one can use Godep_ in its normal way to build the
+project::
 
-  $ git clone <pg_logplexcollector remote> --recursive
-  $ cd pg_logplexcollector
-  $ make
-
-This is because git submodules are used to version and retrieve other
-libraries, such as femebe and logplexc.  Having done this though,
-``make all`` (or just ``make``) will produce binaries in the ``bin``
-directory.
+  $ godep go build
+  $ ./pg_logplexcollector
+  [...output...]
 
 Quick Demo Setup
 ================
 
-There exists a ``Makefile`` target for setting up most of what one
-needs to demonstrate the entire system end-to-end.  It installs
-everything into a subdirectory ``tmp``::
+One can use the ``Makefile`` in the ``integration`` directory for
+setting up most of what one needs to demonstrate the entire system
+end-to-end.  It installs everything into a subdirectory
+``integration/tmp``.  An example is provided below::
 
-  $ PGSRC=git-repo-directory-for-postgres make testdb
+  $ PGSRC=git-repo-directory-for-postgres ./integration/Makefile
 
-  $ ./bin/logplexd &
+  $ godep go build ./integration/logplexd
+  $ ./logplexd &
   https://127.0.0.1:44786 # (dynamically generated)
 
+  $ godep go build
   $ LOGPLEX_URL=https://127.0.0.1:44786 \
-    SERVE_DB_DIR=tmp			\
-    ./bin/pg_logplexcollector
+    SERVE_DB_DIR=./integration/tmp \
+    ./pg_logplexcollector &
 
-  $ ./tmp/postgres/bin/postgres -D tmp/testdb
+  $ ./integration/tmp/postgres/bin/postgres -D ./integration/tmp/testdb &
+  [...messages from logplexd, postgres, and pg_logplexcollector here...]
 
 After this, one should be rewarded with printed HTTP requests, written
 to standard output from ``logplexd``, forwarded by
@@ -56,7 +53,7 @@ For production use, two pieces of software must be configured:
 pg_logfebe
 ==========
 
-Configuring ``pg_logfebe`` requires Postgres 9.2.
+Configuring ``pg_logfebe`` requires Postgres 9.2 or above.
 
 It can be installed via ``make install``, per standard Postgres
 extension mechanisms.  As with all such extensions, the most important
@@ -155,3 +152,5 @@ Open Issues
 .. _pg_logfebe: https://github.com/logplex/pg_logfebe
 
 .. _logplex: https://github.com/heroku/logplex
+
+.. _Godep: https://github.com/tools/godep
