@@ -19,8 +19,11 @@ var versionCheckTests = []struct {
 	{"PG-7.4.15/1", false},
 	{"PG-7.4.15/logfebe-1", false},
 	{"PG-9.2.2/logfebe-1", true},
+	{"PG-9.2alpha1/logfebe-1", true},
 	{"PG-9.3.0/logfebe-1", true},
+	{"PG-9.3beta2/logfebe-1", true},
 	{"PG-9.4.0/logfebe-1", true},
+	{"PG-9.4devel/logfebe-1", true},
 	{"PG7.4.15/1", false},
 }
 
