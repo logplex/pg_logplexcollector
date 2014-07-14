@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -174,7 +173,7 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, sr *serveRecord,
 	catOptionalField("Hint", lr.ErrHint)
 	catOptionalField("Query", lr.UserQuery)
 
-	err := lpc.BufferMessage(time.Now(),
+	err := lpc.BufferMessage(134, time.Now(),
 		"postgres",
 		"postgres."+strconv.Itoa(int(lr.Pid)),
 		msgFmtBuf.Bytes())
@@ -239,7 +238,7 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 	}
 
 	// Set up client with serve
-	cfg.Token = sr.T
+	cfg.Logplex = sr.u
 	client, err := logplexc.NewClient(&cfg)
 	if err != nil {
 		exit(err)
@@ -253,7 +252,7 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 	processLogMsg(die, client, msgInit, sr, exit)
 }
 
-func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {
+func listen(die dieCh, sr *serveRecord) {
 	// Begin listening
 	l, err := net.Listen("unix", sr.P)
 	if err != nil {
@@ -293,15 +292,10 @@ func listen(die dieCh, logplexUrl url.URL, sr *serveRecord) {
 	}
 
 	templateConfig := logplexc.Config{
-		Logplex:            logplexUrl,
 		HttpClient:         client,
 		RequestSizeTrigger: 100 * KB,
 		Concurrency:        3,
 		Period:             time.Second / 4,
-
-		// Set at connection start-up when the client
-		// self-identifies.
-		Token: "",
 	}
 
 	for {
@@ -352,16 +346,6 @@ func main() {
 		}
 	}()
 
-	if os.Getenv("LOGPLEX_URL") == "" {
-		log.Fatal("LOGPLEX_URL is unset")
-	}
-
-	logplexUrl, err := url.Parse(os.Getenv("LOGPLEX_URL"))
-	if err != nil {
-		log.Fatalf("LOGPLEX_URL: could not parse: %q",
-			os.Getenv("LOGPLEX_URL"))
-	}
-
 	// Set up serve database and perform its input checking
 	sdbDir := os.Getenv("SERVE_DB_DIR")
 	if sdbDir == "" {
@@ -408,7 +392,7 @@ func main() {
 			snap := sdb.Snapshot()
 			for i := range snap {
 				os.Remove(snap[i].P)
-				go listen(die, *logplexUrl, &snap[i])
+				go listen(die, &snap[i])
 			}
 		}
 

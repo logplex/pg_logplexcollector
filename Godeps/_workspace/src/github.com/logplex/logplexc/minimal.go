@@ -2,6 +2,7 @@ package logplexc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -25,7 +26,6 @@ type MiniStats struct {
 // constructing a client instance.
 type MiniConfig struct {
 	Logplex    url.URL
-	Token      string
 	HttpClient http.Client
 }
 
@@ -46,6 +46,9 @@ type MiniClient struct {
 	// Configuration that should not be mutated after creation
 	MiniConfig
 
+	// Cached copy of the token, extracted from the Logplex URL.
+	token string
+
 	reqInFlight sync.WaitGroup
 
 	// Messages that have been collected but not yet sent.
@@ -61,11 +64,16 @@ func NewMiniClient(cfg *MiniConfig) (client *MiniClient, err error) {
 	// Make a private copy
 	c.MiniConfig = *cfg
 
-	// If the username and password weren't part of the URL, use
-	// the logplex-token as the password
-	if c.Logplex.User == nil {
-		c.Logplex.User = url.UserPassword("token", c.Token)
+	if c.MiniConfig.Logplex.User == nil {
+		return nil, errors.New("No logplex user information provided")
 	}
+
+	token, ok := c.MiniConfig.Logplex.User.Password()
+	if !ok {
+		return nil, errors.New("No logplex password provided")
+	}
+
+	c.token = token
 
 	return &c, nil
 }
@@ -97,10 +105,11 @@ func (c *MiniClient) Statistics() MiniStats {
 // context, so at worst it seems a buggy or malicious emitter of logs
 // can cause problems for themselves only.
 func (c *MiniClient) BufferMessage(
-	when time.Time, host string, procId string, log []byte) MiniStats {
+	priority int, when time.Time, host string, procId string,
+	log []byte) MiniStats {
 	ts := when.UTC().Format(time.RFC3339)
-	syslogPrefix := "<134>1 " + ts + " " + host + " " +
-		c.Token + " " + procId + " - - "
+	syslogPrefix := "<" + strconv.Itoa(priority) + ">1 " + ts + " " +
+		host + " " + c.token + " " + procId + " - - "
 	msgLen := len(syslogPrefix) + len(log)
 
 	// Avoid racing against other operations that may want to swap

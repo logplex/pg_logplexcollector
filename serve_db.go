@@ -39,9 +39,13 @@
 // serves.new must have at least the following structure:
 //
 //     {"serves": [
-//	    {"i": "identity1": "t": "token1", "p": "/var/run/cluster1/log.sock"},
-//	    {"i": "identity2": "t": "token2", "p": "/var/run/cluster2/log.sock"}
-//	 ]
+//          {"i": "identity1",
+//           "url": "https://token:token-1@some-host.io/logs",
+//           "p": "/var/run/cluster1/log.sock"},
+//          {"i": "identity1",
+//           "url": "https://token:token-2@some-host.io/logs",
+//           "p": "/var/run/cluster2/log.sock"},
+//       ]
 //     }
 //
 // Any other auxiliary keys and values as siblings to the "serves" key
@@ -54,6 +58,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -66,7 +71,7 @@ type sKey struct {
 
 type serveRecord struct {
 	sKey
-	T string
+	u url.URL
 
 	// Auxiliary fields for formatting
 	Name string
@@ -376,7 +381,12 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 		return nil, err
 	}
 
-	tok, err := lookup("t")
+	urlText, err := lookup("url")
+	if err != nil {
+		return nil, err
+	}
+
+	u, err := url.Parse(urlText)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +400,7 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 	name, _ := lookup("name")
 
 	return &serveRecord{sKey: sKey{P: path, I: ident},
-		T: tok, Name: name}, nil
+		u: *u, Name: name}, nil
 }
 
 func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {

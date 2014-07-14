@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 )
@@ -26,7 +27,14 @@ func (*LogplexPrint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	s := httptest.NewTLSServer(&LogplexPrint{})
-	fmt.Println(s.URL)
+	u, err := url.Parse(s.URL)
+	if err != nil {
+		log.Printf("httptest generated a bad URL: %v", s.URL)
+	}
+
+	u.User = url.UserPassword("token",
+		"t.9d19ac58-0597-4ea0-94b0-45778803597c")
+	fmt.Println(u)
 
 	// Signal handling:
 	sigch := make(chan os.Signal)

@@ -24,16 +24,17 @@ setting up most of what one needs to demonstrate the entire system
 end-to-end.  It installs everything into a subdirectory
 ``integration/tmp``.  An example is provided below::
 
-  $ PGSRC=git-repo-directory-for-postgres ./integration/Makefile
-
   $ godep go build ./integration/logplexd
   $ ./logplexd &
-  https://127.0.0.1:44786 # (dynamically generated)
+  # (dynamically generated)
+  https://token:t.9d19ac58-0597-4ea0-94b0-45778803597c@127.0.0.1:32906
+
+  $ PGSRC=git-repo-directory-for-postgres \
+    LOGPLEX_URL=https://token:t.9d19ac58-0597-4ea0-94b0-45778803597c@127.0.0.1:32096 \
+    ./integration/Makefile
 
   $ godep go build
-  $ LOGPLEX_URL=https://127.0.0.1:44786 \
-    SERVE_DB_DIR=./integration/tmp \
-    ./pg_logplexcollector &
+  $ SERVE_DB_DIR=./integration/tmp ./pg_logplexcollector &
 
   $ ./integration/tmp/postgres/bin/postgres -D ./integration/tmp/testdb &
   [...messages from logplexd, postgres, and pg_logplexcollector here...]

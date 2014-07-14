@@ -9,7 +9,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/deafbybeheading/femebe"
+	"github.com/deafbybeheading/femebe/buf"
+	"github.com/deafbybeheading/femebe/core"
 )
 
 var versionCheckTests = []struct {
@@ -29,10 +30,10 @@ var versionCheckTests = []struct {
 
 func TestVersionCheck(t *testing.T) {
 	for i, tt := range versionCheckTests {
-		msgInit := func(dst *femebe.Message, exit exitFn) {
-			buf := bytes.Buffer{}
-			femebe.WriteCString(&buf, tt.Version)
-			dst.InitFromBytes('V', buf.Bytes())
+		msgInit := func(dst *core.Message, exit exitFn) {
+			b := bytes.Buffer{}
+			buf.WriteCString(&b, tt.Version)
+			dst.InitFromBytes('V', b.Bytes())
 		}
 
 		ok := true
@@ -50,7 +51,7 @@ func TestVersionCheck(t *testing.T) {
 func TestVersionMsgInitErr(t *testing.T) {
 	theErr := errors.New("An error; e.g. network difficulties")
 
-	msgInit := func(dst *femebe.Message, exit exitFn) {
+	msgInit := func(dst *core.Message, exit exitFn) {
 		exit(theErr)
 	}
 

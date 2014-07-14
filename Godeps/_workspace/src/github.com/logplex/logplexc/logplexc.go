@@ -81,7 +81,6 @@ type Client struct {
 
 type Config struct {
 	Logplex            url.URL
-	Token              string
 	HttpClient         http.Client
 	RequestSizeTrigger int
 	Concurrency        int
@@ -96,7 +95,6 @@ func NewClient(cfg *Config) (*Client, error) {
 	c, err := NewMiniClient(
 		&MiniConfig{
 			Logplex:    cfg.Logplex,
-			Token:      cfg.Token,
 			HttpClient: cfg.HttpClient,
 		})
 
@@ -182,9 +180,10 @@ func (m *Client) Close() {
 }
 
 func (m *Client) BufferMessage(
-	when time.Time, host string, procId string, log []byte) error {
+	priority int, when time.Time, host string, procId string,
+	log []byte) error {
 
-	s := m.c.BufferMessage(when, host, procId, log)
+	s := m.c.BufferMessage(priority, when, host, procId, log)
 	if s.Buffered >= m.RequestSizeTrigger ||
 		m.timeTrigger == TimeTriggerImmediate {
 		m.maybeWork()

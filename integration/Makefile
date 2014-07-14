@@ -29,8 +29,8 @@ postgres: $(TMP)postgres/bin/pg_config
 pg_logfebe: $(TMP)postgres/lib/pg_logfebe.so
 
 $(TMP)serves.new:
-	printf '{"serves": [{"i": "test identity", "t": "test-token", "p": "%s", "name": "humanname"}]}\n' \
-		$(realpath $(TMP))/testdb/log.sock > $@
+	printf '{"serves": [{"i": "test identity", "url": "%s", "p": "%s", "name": "humanname"}]}\n' \
+		$(LOGPLEX_URL) $(realpath $(TMP))/testdb/log.sock > $@
 
 # Copy files from other projects useful for testing.
 

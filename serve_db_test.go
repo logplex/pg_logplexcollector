@@ -2,7 +2,9 @@ package main
 
 import (
 	"io/ioutil"
+	"net/url"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -18,39 +20,57 @@ func (f *fixturePair) check(t *testing.T, sdb *serveDb) {
 			t.Fatalf("Expected to find identifier %q", triplet.I)
 		}
 
-		if triplet.T != rec.T {
-			t.Fatalf("Expected to resolve to %v, "+
-				"but got %v instead", triplet.T, rec.T)
+		if !reflect.DeepEqual(triplet.u, rec.u) {
+			t.Fatalf("Expected to resolve to %+v, "+
+				"but got %v instead", triplet.u, rec.u)
 		}
 	}
 
 }
 
+func mustParseURL(us string) url.URL {
+	u, err := url.Parse(us)
+	if err != nil {
+		panic(err)
+	}
+	return *u
+}
+
 var fixtures = []fixturePair{
 	{
 		json: []byte(`{"serves": ` +
-			`[{"i": "apple", "t": "chocolate", ` +
+			`[{"i": "apple", "url": "https://token:chocolate@localhost", ` +
 			`"p": "/p1/log.sock"}, ` +
-			`{"i": "banana", "t": "vanilla", ` +
+			`{"i": "banana", "url": "https://token:vanilla@localhost", ` +
 			`"p": "/p2/log.sock"}]}`),
 		triplets: []serveRecord{
-			{sKey{I: "apple", P: "/p1/log.sock"}, "chocolate",
+			{sKey{I: "apple", P: "/p1/log.sock"},
+				mustParseURL(
+					"https://token:chocolate@localhost"),
 				"brown"},
-			{sKey{I: "banana", P: "/p2/log.sock"}, "vanilla",
+			{sKey{I: "banana", P: "/p2/log.sock"},
+				mustParseURL(
+					"https://token:vanilla@localhost"),
 				"white"},
 		},
 	},
 	{
 		json: []byte(`{"serves": ` +
-			`[{"i": "bed", "t": "pillow", ` +
+			`[{"i": "bed", ` +
+			`"url": "https://token:pillow@localhost", ` +
 			`"p": "/p1/log.sock"}, ` +
-			`{"i": "nightstand", "t": "alarm clock", ` +
+			`{"i": "nightstand", ` +
+			`"url": "https://token:alarm-clock@localhost", ` +
 			`"p": "/p2/log.sock"}]}`),
 		triplets: []serveRecord{
 			{sKey{I: "bed", P: "/p1/log.sock"},
-				"pillow", "white"},
+				mustParseURL(
+					"https://token:pillow@localhost"),
+				"white"},
 			{sKey{I: "nightstand", P: "/p2/log.sock"},
-				"alarm clock", "black"},
+				mustParseURL(
+					"https://token:alarm-clock@localhost"),
+				"black"},
 		},
 	},
 }
