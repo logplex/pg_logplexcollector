@@ -9,7 +9,7 @@ testdb: $(TMP)testdb $(TMP)serves.new
 
 # Everything below here is a monstrous hack to make playing with the
 # toolchain a bit easier.  If one sets
-# PGSRCDIR=/a/local/git/repo/with/postgres then typing "make testdb"
+# PGSRC=/a/local/git/repo/with/postgres then typing "make testdb"
 # should copy in Postgres, configure, install it locally, check out
 # the pg_logfebe extension, compile and install *that*, initdb, and
 # then configure that initdb's postgresql.conf to load the extension
