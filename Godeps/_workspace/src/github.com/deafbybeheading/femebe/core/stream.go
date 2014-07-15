@@ -1,93 +1,43 @@
-package femebe
+package core
 
 import (
 	"bytes"
-	"crypto/tls"
-	"errors"
+	"github.com/deafbybeheading/femebe/buf"
+	"github.com/deafbybeheading/femebe/util"
 	"io"
-	"net"
 )
 
-type Flusher interface {
-	Flush() error
+// A duplex stream of FEBE messages
+type Stream interface {
+	util.Flusher
+	// Send the Message m on the stream, returning any error
+	// encountered
+	Send(m *Message) error
+	// Check whether another message is available to read from the
+	// stream without blocking
+	HasNext() bool
+	// Receive the next message, loading it into m. If this
+	// returns an error, the contents of m are undefined.
+	Next(m *Message) error
+	Close() error
 }
 
 // The minimum number of bytes required to make a new hybridMsg when
 // calling Next().  If buffering and less than MSG_HEADER_SIZE remain
 // in the buffer, the remaining bytes must be saved for the next
 // invocation of Next().
-const MSG_HEADER_MIN_SIZE = 5
+const MsgHeaderMinSize = 5
 
-func baseNewMessageStream(name string, rw io.ReadWriteCloser) *MessageStream {
-	buf := bytes.NewBuffer(make([]byte, 0, 8192))
-
-	return &MessageStream{
-		Name:         name,
-		rw:           rw,
-		msgRemainder: *buf,
-	}
-}
-
-type Config struct {
-	Name    string
-	Sslmode string
-}
-
-func NegotiateTLS(c net.Conn, sslmode string, config *tls.Config) (
-	net.Conn, error) {
-	if sslmode != "disable" {
-		// send an SSLRequest message
-		// length: int32(8)
-		// code:   int32(80877103)
-		c.Write([]byte{0x00, 0x00, 0x00, 0x08,
-			0x04, 0xd2, 0x16, 0x2f})
-
-		sslResponse := make([]byte, 1)
-		bytesRead, err := io.ReadFull(c, sslResponse)
-		if bytesRead != 1 || err != nil {
-			return nil, errors.New("Could not read response to SSL Request")
-		}
-
-		if sslResponse[0] == 'S' {
-			return tls.Client(c, config), nil
-		} else if sslResponse[0] == 'N' && sslmode != "allow" &&
-			sslmode != "prefer" {
-			// reject; we require ssl
-			return nil, errors.New("SSL required but declined by server.")
-		} else {
-			return c, nil
-		}
-
-		panic("Oh snap!")
-	}
-
-	return c, nil
-}
-
-func NewClientMessageStream(name string, rw io.ReadWriteCloser) *MessageStream {
-	c := baseNewMessageStream(name, rw)
-	c.state = CONN_STARTUP
-
-	return c
-}
-
-func NewServerMessageStream(name string, rw io.ReadWriteCloser) *MessageStream {
-	c := baseNewMessageStream(name, rw)
-	c.state = CONN_NORMAL
-
-	return c
-}
-
+// State of the stream connection
 type ConnState int32
 
 const (
-	CONN_STARTUP ConnState = iota
-	CONN_NORMAL
-	CONN_ERR
+	ConnStartup ConnState = iota
+	ConnNormal
+	ConnErr
 )
 
 type MessageStream struct {
-	Name  string
 	rw    io.ReadWriteCloser
 	state ConnState
 	err   error
@@ -100,31 +50,57 @@ type MessageStream struct {
 	scratchBuf [8192]byte
 }
 
-func (c *MessageStream) HasNext() bool {
-	return c.msgRemainder.Len() >= MSG_HEADER_MIN_SIZE
+func baseNewMessageStream(rw io.ReadWriteCloser, state ConnState) *MessageStream {
+	buf := bytes.NewBuffer(make([]byte, 0, 8192))
+
+	return &MessageStream{
+		rw:           rw,
+		msgRemainder: *buf,
+		state:        state,
+	}
 }
 
-func (c *MessageStream) Next(dst *Message) error {
+// Create a new MessageStream for managing messages coming from a FEBE
+// frontend (e.g., psql). The resulting message stream owns the
+// ReadWriteCloser and the caller should not interact with the wrapped
+// object directly.
+func NewFrontendStream(rw io.ReadWriteCloser) *MessageStream {
+	return baseNewMessageStream(rw, ConnStartup)
+}
+
+// Create a new MessageStream for managing messages comfing from a
+// FEBE backend (e.g., Postgres). The resulting message stream owns
+// the ReadWriteCloser and the caller should not interact with the
+// wrapped object directly.
+func NewBackendStream(rw io.ReadWriteCloser) *MessageStream {
+	return baseNewMessageStream(rw, ConnNormal)
+}
+
+func (c *MessageStream) HasNext() bool {
+	return c.msgRemainder.Len() >= MsgHeaderMinSize
+}
+
+func (c *MessageStream) Next(dst *Message) (err error) {
 	switch c.state {
-	case CONN_STARTUP:
-		msgSz, err := ReadUint32(c.rw)
+	case ConnStartup:
+		msgSz, err := buf.ReadUint32(c.rw)
 		if err != nil {
 			c.err = err
-			c.state = CONN_ERR
+			c.state = ConnErr
 			return err
 		}
 
-		dst.InitPromise(MSG_TYPE_FIRST, msgSz, []byte{}, c.rw)
-		c.state = CONN_NORMAL
+		dst.InitPromise(MsgTypeFirst, msgSz, []byte{}, c.rw)
+		c.state = ConnNormal
 		return nil
 
-	case CONN_NORMAL:
+	case ConnNormal:
 	again:
 		// Fast-path: if a message can be formed from the
 		// buffer, do so immediately.
 		if c.HasNext() {
 			msgType := c.msgRemainder.Next(1)[0]
-			msgSz := ReadUint32FromBuffer(&c.msgRemainder)
+			msgSz := buf.ReadUint32FromBuffer(&c.msgRemainder)
 
 			remainingSz := msgSz - 4
 
@@ -158,7 +134,7 @@ func (c *MessageStream) Next(dst *Message) error {
 		// error has been set in a previous iteration:
 		// transition to CONN_ERR.
 		if !c.HasNext() && c.err != nil {
-			c.state = CONN_ERR
+			c.state = ConnErr
 			return c.err
 		}
 
@@ -191,7 +167,7 @@ func (c *MessageStream) Next(dst *Message) error {
 		// deliver a Promise style message, so just try again.
 		goto again
 
-	case CONN_ERR:
+	case ConnErr:
 		return c.err
 
 	default:
@@ -207,9 +183,13 @@ func (c *MessageStream) Send(msg *Message) (err error) {
 }
 
 func (c *MessageStream) Flush() error {
-	if flushable, ok := c.rw.(Flusher); ok {
+	if flushable, ok := c.rw.(util.Flusher); ok {
 		return flushable.Flush()
 	}
 
 	return nil
+}
+
+func (c *MessageStream) Close() error {
+	return c.rw.Close()
 }

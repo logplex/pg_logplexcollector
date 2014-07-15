@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/deafbybeheading/femebe",
-			"Rev": "a16013300c693b1d8f10c766b2185dcbd7dbbd3e"
+			"Rev": "0e34380154350837930e60dd33b358b32d450233"
 		},
 		{
 			"ImportPath": "github.com/logplex/logplexc",

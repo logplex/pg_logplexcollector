@@ -1,21 +1,22 @@
-package femebe
+package core
 
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/deafbybeheading/femebe/buf"
 	"io"
 )
 
 var ErrTooLarge = errors.New("Message buffering size limit exceeded")
 
-const MSG_TYPE_FIRST = '\000'
+const MsgTypeFirst = '\000'
 
 type Message struct {
 	// Constant-width header
 	msgType byte
 	sz      uint32
 
-	buffered Reader
+	buffered buf.Reader
 	union    io.Reader
 
 	// The rest of the message yet to be read.
@@ -63,12 +64,11 @@ func (m *Message) Force() ([]byte, error) {
 	return m.buffered.Bytes(), err
 }
 
-var bufBack [4]byte
-
 func (m *Message) WriteTo(w io.Writer) (_ int64, err error) {
+	var bufBack [4]byte
 	var totalN int64
 
-	if mt := m.MsgType(); mt != MSG_TYPE_FIRST {
+	if mt := m.MsgType(); mt != MsgTypeFirst {
 		n, err := w.Write([]byte{mt})
 		totalN += int64(n)
 		if err != nil {
@@ -124,4 +124,14 @@ func (m *Message) InitPromise(msgType byte, size uint32,
 	m.future = io.LimitReader(r, remaining)
 
 	m.union = io.MultiReader(&m.buffered, m.future)
+}
+
+func (m *Message) InitFromMessage(src *Message) {
+	payloadBytes, err := src.Force()
+	if err != nil {
+		panic(err)
+	}
+	dstBytes := make([]byte, len(payloadBytes), len(payloadBytes))
+	copy(dstBytes, payloadBytes)
+	m.InitFromBytes(src.MsgType(), dstBytes)
 }

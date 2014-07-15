@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/deafbybeheading/femebe"
+	"github.com/deafbybeheading/femebe/buf"
 )
 
 type logRecord struct {
@@ -138,19 +138,19 @@ func readUint64(r io.Reader) (ret uint64, err error) {
 func parseLogRecord(
 	dst *logRecord, data []byte, exit exitFn) {
 
-	buf := bytes.NewBuffer(data)
+	b := bytes.NewBuffer(data)
 
-	// Read the next nullable string from buf, returning a 'nil'
+	// Read the next nullable string from b, returning a 'nil'
 	// *string should it be null.
 	nextNullableString := func() *string {
-		np, err := femebe.ReadByte(buf)
+		np, err := buf.ReadByte(b)
 		if err != nil {
 			exit(err)
 		}
 
 		switch np {
 		case 'P':
-			s, err := femebe.ReadCString(buf)
+			s, err := buf.ReadCString(b)
 			if err != nil {
 				exit(err)
 			}
@@ -160,7 +160,7 @@ func parseLogRecord(
 		case 'N':
 			// 'N' is still followed by a NUL byte that
 			// must be consumed.
-			_, err := femebe.ReadCString(buf)
+			_, err := buf.ReadCString(b)
 			if err != nil {
 				exit(err)
 			}
@@ -178,9 +178,9 @@ func parseLogRecord(
 			"but the compiler doesn't know that")
 	}
 
-	// Read a non-nullable string from buf
+	// Read a non-nullable string from b
 	nextString := func() string {
-		s, err := femebe.ReadCString(buf)
+		s, err := buf.ReadCString(b)
 		if err != nil {
 			exit(err)
 		}
@@ -189,7 +189,7 @@ func parseLogRecord(
 	}
 
 	nextInt32 := func() int32 {
-		i32, err := femebe.ReadInt32(buf)
+		i32, err := buf.ReadInt32(b)
 		if err != nil {
 			exit(err)
 		}
@@ -198,7 +198,7 @@ func parseLogRecord(
 	}
 
 	nextInt64 := func() int64 {
-		i64, err := readInt64(buf)
+		i64, err := readInt64(b)
 		if err != nil {
 			exit(err)
 		}
@@ -207,7 +207,7 @@ func parseLogRecord(
 	}
 
 	nextUint64 := func() uint64 {
-		ui64, err := readUint64(buf)
+		ui64, err := readUint64(b)
 		if err != nil {
 			exit(err)
 		}
@@ -239,9 +239,9 @@ func parseLogRecord(
 	dst.FileErrPos = nextNullableString()
 	dst.ApplicationName = nextNullableString()
 
-	if buf.Len() != 0 {
+	if b.Len() != 0 {
 		exit("LogRecord message has mismatched "+
 			"length header and cString contents: remaining %d",
-			buf.Len())
+			b.Len())
 	}
 }

@@ -1,10 +1,23 @@
-package femebe
+package core
 
 import (
 	"bytes"
 	"io"
 	"testing"
 )
+
+type closableBuffer struct {
+	io.ReadWriter
+}
+
+func (c *closableBuffer) Close() error {
+	// noop, to satisfy interface
+	return nil
+}
+
+func newClosableBuffer(buf *bytes.Buffer) *closableBuffer {
+	return &closableBuffer{buf}
+}
 
 func InitBogon(m *Message) {
 	m.InitFromBytes('B', []byte{0, 0, 0, 0})
@@ -13,8 +26,7 @@ func InitBogon(m *Message) {
 func newTestMessageStream(t *testing.T) *MessageStream {
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 	ms := MessageStream{
-		Name:         "Test",
-		state:        CONN_NORMAL,
+		state:        ConnNormal,
 		msgRemainder: *buf,
 	}
 

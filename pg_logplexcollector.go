@@ -14,7 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deafbybeheading/femebe"
+	"github.com/deafbybeheading/femebe/buf"
+	"github.com/deafbybeheading/femebe/core"
 	"github.com/logplex/logplexc"
 )
 
@@ -37,9 +38,9 @@ const (
 type exitFn func(args ...interface{})
 
 // Fills a message on behalf of the caller.  Often the closure will
-// close over a femebe.MessageStream to provide a source of data for
-// the filled message.
-type msgInit func(dst *femebe.Message, exit exitFn)
+// close over a core.MessageStream to provide a source of data for the
+// filled message.
+type msgInit func(dst *core.Message, exit exitFn)
 
 // Used only in the close-to-broadcast style to exit goroutines.
 type dieCh <-chan struct{}
@@ -47,7 +48,7 @@ type dieCh <-chan struct{}
 // Read the version message, calling exit if this is not a supported
 // version.
 func processVerMsg(msgInit msgInit, exit exitFn) {
-	var m femebe.Message
+	var m core.Message
 
 	msgInit(&m, exit)
 
@@ -62,7 +63,7 @@ func processVerMsg(msgInit msgInit, exit exitFn) {
 			m.Size())
 	}
 
-	s, err := femebe.ReadCString(m.Payload())
+	s, err := buf.ReadCString(m.Payload())
 	if err != nil {
 		exit("couldn't read version string: %v", err)
 	}
@@ -77,7 +78,7 @@ func processVerMsg(msgInit msgInit, exit exitFn) {
 
 // Process the identity ('I') message, reporting the identity therein.
 func processIdentMsg(msgInit msgInit, exit exitFn) string {
-	var m femebe.Message
+	var m core.Message
 
 	msgInit(&m, exit)
 
@@ -93,7 +94,7 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 			m.Size())
 	}
 
-	s, err := femebe.ReadCString(m.Payload())
+	s, err := buf.ReadCString(m.Payload())
 	if err != nil {
 		exit("couldn't read identification string: %v",
 			err)
@@ -105,7 +106,7 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 // Process a log message, sending it to the client.
 func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
 	sr *serveRecord, exit exitFn) {
-	var m femebe.Message
+	var m core.Message
 
 	for {
 		// Poll request to exit
@@ -185,7 +186,7 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, sr *serveRecord,
 func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 	sr *serveRecord) {
 	var err error
-	stream := femebe.NewServerMessageStream("", rwc)
+	stream := core.NewBackendStream(rwc)
 
 	var exit exitFn
 	exit = func(args ...interface{}) {
@@ -217,7 +218,7 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 	}()
 
 	var msgInit msgInit
-	msgInit = func(m *femebe.Message, exit exitFn) {
+	msgInit = func(m *core.Message, exit exitFn) {
 		err = stream.Next(m)
 		if err == io.EOF {
 			exit("postgres client disconnects")
