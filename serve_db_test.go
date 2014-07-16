@@ -47,10 +47,12 @@ var fixtures = []fixturePair{
 			{sKey{I: "apple", P: "/p1/log.sock"},
 				mustParseURL(
 					"https://token:chocolate@localhost"),
+				nil,
 				"brown"},
 			{sKey{I: "banana", P: "/p2/log.sock"},
 				mustParseURL(
 					"https://token:vanilla@localhost"),
+				nil,
 				"white"},
 		},
 	},
@@ -66,10 +68,12 @@ var fixtures = []fixturePair{
 			{sKey{I: "bed", P: "/p1/log.sock"},
 				mustParseURL(
 					"https://token:pillow@localhost"),
+				nil,
 				"white"},
 			{sKey{I: "nightstand", P: "/p2/log.sock"},
 				mustParseURL(
 					"https://token:alarm-clock@localhost"),
+				nil,
 				"black"},
 		},
 	},

@@ -41,9 +41,11 @@
 //     {"serves": [
 //          {"i": "identity1",
 //           "url": "https://token:token-1@some-host.io/logs",
+//           "audit": "https://token:token-1@audit-host.io/logs"
 //           "p": "/var/run/cluster1/log.sock"},
 //          {"i": "identity1",
 //           "url": "https://token:token-2@some-host.io/logs",
+//           "audit": "https://token:token-1@audit-host.io/logs"
 //           "p": "/var/run/cluster2/log.sock"},
 //       ]
 //     }
@@ -71,7 +73,8 @@ type sKey struct {
 
 type serveRecord struct {
 	sKey
-	u url.URL
+	u     url.URL
+	audit *url.URL
 
 	// Auxiliary fields for formatting
 	Name string
@@ -391,6 +394,28 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 		return nil, err
 	}
 
+	audit, err := func() (*url.URL, error) {
+		// Parse optional auditing field: an error is okay
+		// here.
+		auditText, err := lookup("audit")
+		if err != nil {
+			return nil, nil
+		}
+
+		// Should the audit key be present, a non-valid URL is
+		// sufficient reason to call the file invalid.
+		audit, err := url.Parse(auditText)
+		if err != nil {
+			return nil, err
+		}
+
+		return audit, nil
+	}()
+
+	if err != nil {
+		return nil, err
+	}
+
 	ident, err := lookup("i")
 	if err != nil {
 		return nil, err
@@ -400,7 +425,7 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 	name, _ := lookup("name")
 
 	return &serveRecord{sKey: sKey{P: path, I: ident},
-		u: *u, Name: name}, nil
+		u: *u, audit: audit, Name: name}, nil
 }
 
 func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {

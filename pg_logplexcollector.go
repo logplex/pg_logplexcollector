@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -105,8 +106,8 @@ func processIdentMsg(msgInit msgInit, exit exitFn) string {
 }
 
 // Process a log message, sending it to the client.
-func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
-	sr *serveRecord, exit exitFn) {
+func processLogMsg(die dieCh, primary *logplexc.Client, audit *logplexc.Client,
+	msgInit msgInit, sr *serveRecord, exit exitFn) {
 	var m core.Message
 
 	for {
@@ -139,14 +140,58 @@ func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
 
 		var lr logRecord
 		parseLogRecord(&lr, payload, exit)
-		processLogRec(&lr, lpc, sr, exit)
+		routeLogRecord(&lr, primary, audit, sr, exit)
 	}
 }
 
 // Process a single logRecord value, buffering it in the logplex
 // client.
-func processLogRec(lr *logRecord, lpc *logplexc.Client, sr *serveRecord,
-	exit exitFn) {
+func routeLogRecord(lr *logRecord, primary *logplexc.Client,
+	audit *logplexc.Client, sr *serveRecord, exit exitFn) {
+	var targets []*logplexc.Client
+	hasAudit := false
+
+	// Find error messages that look like connection auditing
+	// strings and report them to the auditing target *only*.
+	if audit != nil && lr.ErrMessage != nil {
+		switch {
+		case strings.HasPrefix(*lr.ErrMessage, "connection received: "):
+			fallthrough
+		case strings.HasPrefix(*lr.ErrMessage, "connection authorized: "):
+			fallthrough
+		case strings.HasPrefix(*lr.ErrMessage, "replication connection authorized: "):
+			targets = []*logplexc.Client{audit}
+			hasAudit = true
+		default:
+			targets = []*logplexc.Client{primary}
+		}
+	} else {
+		targets = []*logplexc.Client{primary}
+	}
+
+	// For interesting SQLState errors, *also* send them to the
+	// audit endpoint.
+	if audit != nil && lr.SQLState != nil {
+		switch {
+		case strings.HasPrefix(*lr.SQLState, "58"):
+			fallthrough
+		case strings.HasPrefix(*lr.SQLState, "F0"):
+			fallthrough
+		case strings.HasPrefix(*lr.SQLState, "XX"):
+			if !hasAudit {
+				targets = append(targets, audit)
+				hasAudit = true
+			}
+		}
+	}
+
+	for _, tgt := range targets {
+		emitLogRecord(lr, sr, tgt, tgt == audit, exit)
+	}
+}
+
+func emitLogRecord(lr *logRecord, sr *serveRecord, target *logplexc.Client,
+	isAudit bool, exit exitFn) {
 	// Buffer to format the complete log message in.
 	msgFmtBuf := bytes.Buffer{}
 
@@ -170,12 +215,18 @@ func processLogRec(lr *logRecord, lpc *logplexc.Client, sr *serveRecord,
 		msgFmtBuf.WriteString("[" + sr.Name + "] ")
 	}
 
+	if isAudit {
+		// The audit endpoint may be multiplexed, so add the
+		// identity to help tell log records apart.
+		msgFmtBuf.WriteString("identity=" + sr.I + " ")
+	}
+
 	catOptionalField("", lr.ErrMessage)
 	catOptionalField("Detail", lr.ErrDetail)
 	catOptionalField("Hint", lr.ErrHint)
 	catOptionalField("Query", lr.UserQuery)
 
-	err := lpc.BufferMessage(134, time.Now(),
+	err := target.BufferMessage(134, time.Now(),
 		"postgres",
 		"postgres."+strconv.Itoa(int(lr.Pid)),
 		msgFmtBuf.Bytes())
@@ -240,18 +291,33 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 	}
 
 	// Set up client with serve
-	cfg.Logplex = sr.u
-	client, err := logplexc.NewClient(&cfg)
-	if err != nil {
-		exit(err)
+	client := func(cfg logplexc.Config, url *url.URL) *logplexc.Client {
+		cfg.Logplex = *url
+		client, err := logplexc.NewClient(&cfg)
+		if err != nil {
+			exit(err)
+		}
+
+		return client
+	}
+
+	primary := client(cfg, &sr.u)
+
+	var audit *logplexc.Client
+
+	if sr.audit != nil {
+		audit = client(cfg, sr.audit)
 	}
 
 	defer func() {
-		client.Close()
-		log.Printf("logplex client shuts down, statistics: %#v", client.Stats)
+		primary.Close()
+
+		if audit != nil {
+			audit.Close()
+		}
 	}()
 
-	processLogMsg(die, client, msgInit, sr, exit)
+	processLogMsg(die, primary, audit, msgInit, sr, exit)
 }
 
 func listen(die dieCh, sr *serveRecord) {
