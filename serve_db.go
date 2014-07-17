@@ -47,6 +47,10 @@
 //           "url": "https://token:token-2@some-host.io/logs",
 //           "audit": "https://token:token-1@audit-host.io/logs"
 //           "p": "/var/run/cluster2/log.sock"},
+//          {"i": "identity1",
+//           "protocol": "syslog",
+//           "url": "https://token:token-2@some-host.io/logs",
+//           "p": "/var/run/syslog-forward"},
 //       ]
 //     }
 //
@@ -73,8 +77,9 @@ type sKey struct {
 
 type serveRecord struct {
 	sKey
-	u     url.URL
-	audit *url.URL
+	u        url.URL
+	audit    *url.URL
+	protocol string
 
 	// Auxiliary fields for formatting
 	Name string
@@ -421,11 +426,16 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 		return nil, err
 	}
 
+	proto, err := lookup("protocol")
+	if err != nil {
+		proto = "logfebe"
+	}
+
 	// Optional fields: okay to not explode if not present.
 	name, _ := lookup("name")
 
 	return &serveRecord{sKey: sKey{P: path, I: ident},
-		u: *u, audit: audit, Name: name}, nil
+		u: *u, audit: audit, protocol: proto, Name: name}, nil
 }
 
 func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {

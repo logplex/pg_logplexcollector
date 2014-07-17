@@ -322,7 +322,16 @@ func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
 
 func listen(die dieCh, sr *serveRecord) {
 	// Begin listening
-	l, err := net.Listen("unix", sr.P)
+	var l net.Listener
+	var pc net.PacketConn
+	var err error
+
+	if sr.protocol == "syslog" {
+		pc, err = net.ListenPacket("unixgram", sr.P)
+	} else {
+		l, err = net.Listen("unix", sr.P)
+	}
+
 	if err != nil {
 		log.Fatalf(
 			"exiting, cannot listen to %q: %v",
@@ -366,26 +375,34 @@ func listen(die dieCh, sr *serveRecord) {
 		Period:             time.Second / 4,
 	}
 
-	for {
-		select {
-		case <-die:
-			log.Print("listener exits normally from die request")
-			return
-		default:
-			break
-		}
+	switch sr.protocol {
+	case "logfebe":
+		for {
+			select {
+			case <-die:
+				log.Print("listener exits normally from die request")
+				return
+			default:
+				break
+			}
 
-		conn, err := l.Accept()
-		if err != nil {
-			log.Printf("accept error: %v", err)
-		}
+			conn, err := l.Accept()
+			if err != nil {
+				log.Printf("accept error: %v", err)
+			}
 
-		if err != nil {
-			log.Fatalf("serve database suffers unrecoverable "+
-				"error: %v", err)
-		}
+			if err != nil {
+				log.Fatalf("serve database suffers unrecoverable "+
+					"error: %v", err)
+			}
 
-		go logWorker(die, conn, templateConfig, sr)
+			go logWorker(die, conn, templateConfig, sr)
+		}
+	case "syslog":
+		go syslogWorker(die, pc, templateConfig, sr)
+	default:
+		log.Fatalf("cannot comprehend protocol %v specified in "+
+			"servedb.", sr.protocol)
 	}
 }
 
@@ -440,7 +457,7 @@ func main() {
 			}
 
 			log.Fatalf(
-				"serve database suffers an unrecoverable error: %v",
+				"serve database suffers an unrecoverable error in listen: %v",
 				err)
 		}
 
