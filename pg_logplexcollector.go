@@ -218,7 +218,8 @@ func emitLogRecord(lr *logRecord, sr *serveRecord, target *logplexc.Client,
 	if isAudit {
 		// The audit endpoint may be multiplexed, so add the
 		// identity to help tell log records apart.
-		msgFmtBuf.WriteString("identity=" + sr.I + " ")
+		msgFmtBuf.WriteString("instance_type=shogun identity=" +
+			sr.I + " ")
 	}
 
 	catOptionalField("", lr.ErrMessage)

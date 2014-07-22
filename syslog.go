@@ -35,7 +35,9 @@ func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config,
 			// leads to some weird syslog-in-syslog
 			// framing, but perhaps it's good enough.
 			target.BufferMessage(134, time.Now(),
-				"audit", "-", append([]byte("identity="+sr.I+" "), buf[:n]...))
+				"audit", "-", append([]byte(
+					"instance_type=shogun identity="+
+						sr.I+" "), buf[:n]...))
 		}
 
 		if err != nil {
