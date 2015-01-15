@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/logplex/logplexc"
 	"log"
 	"net"
 	"time"
+
+	"github.com/logplex/logplexc"
 )
 
 func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config,

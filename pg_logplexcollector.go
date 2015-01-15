@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"io"
@@ -325,11 +326,17 @@ func listen(die dieCh, sr *serveRecord) {
 	// Begin listening
 	var l net.Listener
 	var pc net.PacketConn
+	var f io.Reader
 	var err error
 
-	if sr.protocol == "syslog" {
+	switch sr.protocol {
+	case "syslog":
+		os.Remove(sr.P)
 		pc, err = net.ListenPacket("unixgram", sr.P)
-	} else {
+	case "logfile":
+		f, err = os.Open(sr.P)
+	default:
+		os.Remove(sr.P)
 		l, err = net.Listen("unix", sr.P)
 	}
 
@@ -401,6 +408,8 @@ func listen(die dieCh, sr *serveRecord) {
 		}
 	case "syslog":
 		go syslogWorker(die, pc, templateConfig, sr)
+	case "logfile":
+		go lineWorker(die, bufio.NewReader(f), templateConfig, sr)
 	default:
 		log.Fatalf("cannot comprehend protocol %v specified in "+
 			"servedb.", sr.protocol)
@@ -477,7 +486,6 @@ func main() {
 			// Set up new servers for the new database state.
 			snap := sdb.Snapshot()
 			for i := range snap {
-				os.Remove(snap[i].P)
 				go listen(die, &snap[i])
 			}
 		}
