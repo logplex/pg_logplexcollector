@@ -3,14 +3,36 @@ package main
 import (
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/logplex/logplexc"
 )
 
-func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config,
-	sr *serveRecord) {
+func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config, sr *serveRecord) {
+	os.Remove(sr.P)
+
+	// Make world-writable so anything can connect and send logs.
+	// This may be be worth locking down more, but as-is unless
+	// pg_logplexcollector and the Postgres server share the same
+	// running user common umasks will be useless.
+	fi, err := os.Stat(sr.P)
+	if err != nil {
+		log.Fatalf(
+			"exiting, cannot stat just created socket %q: %v",
+			sr.P, err)
+	}
+
+	err = os.Chmod(sr.P, fi.Mode().Perm()|0222)
+	if err != nil {
+		log.Fatalf(
+			"exiting, cannot make just created socket "+
+				"world-writable %q: %v",
+			sr.P, err)
+	}
+
 	cfg.Logplex = sr.u
+
 	buf := make([]byte, 9*KB)
 	target, err := logplexc.NewClient(&cfg)
 	if err != nil {
