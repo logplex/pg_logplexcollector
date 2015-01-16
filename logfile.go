@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"io"
 	"log"
+	"regexp"
 	"time"
 
 	"github.com/logplex/logplexc"
 )
+
+var prefix = regexp.MustCompile(`^(\[\d*\] [^-*#]+|.*)`)
 
 func lineWorker(die dieCh, r *bufio.Reader, cfg logplexc.Config, sr *serveRecord) {
 	cfg.Logplex = sr.u
@@ -26,8 +29,10 @@ func lineWorker(die dieCh, r *bufio.Reader, cfg logplexc.Config, sr *serveRecord
 		}
 
 		l, _, err := r.ReadLine()
+		l = prefix.ReplaceAll(l, []byte(""))
 		if len(l) > 0 {
-			target.BufferMessage(134, time.Now(), "app", "redis", l)
+			target.BufferMessage(134, time.Now(), "redis",
+				sr.Name, l)
 		}
 
 		if err != nil {
