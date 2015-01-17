@@ -110,7 +110,7 @@ func main() {
 
 	sdb := newServeDb(sdbDir)
 
-	var die chan struct{} = make(chan struct{})
+	die := make(chan struct{})
 
 	// Brutal hack to get around pathological Go use of virtual
 	// memory: die once in a while.  A supervisor (e.g. Upstart)

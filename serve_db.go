@@ -141,7 +141,7 @@ func (t *serveDb) Snapshot() []serveRecord {
 
 	for _, v := range t.identToServe {
 		snap[i] = *v
-		i += 1
+		i++
 	}
 
 	// Recheck in case of race conditions.  Array bounds checking
@@ -360,7 +360,7 @@ func (t *serveDb) reject(submitPath string, nonfatale error) (err error) {
 	return nil
 }
 
-func projectFromJson(v interface{}) (*serveRecord, error) {
+func projectFromJSON(v interface{}) (*serveRecord, error) {
 	maybeMap, ok := v.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf(
@@ -465,7 +465,7 @@ func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {
 	// ought to be.
 	newMapping := make(map[sKey]*serveRecord)
 	for _, val := range maybeList {
-		rec, err := projectFromJson(val)
+		rec, err := projectFromJSON(val)
 		if err != nil {
 			return nil, err
 		}
