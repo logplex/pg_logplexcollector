@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"crypto/tls"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -26,7 +24,7 @@ func listen(die dieCh, sr *serveRecord) {
 	// Begin listening
 	var l net.Listener
 	var pc net.PacketConn
-	var f io.Reader
+	var f *os.File
 	var err error
 
 	switch sr.protocol {
@@ -68,7 +66,7 @@ func listen(die dieCh, sr *serveRecord) {
 	case "syslog":
 		go syslogWorker(die, pc, templateConfig, sr)
 	case "logfile":
-		go lineWorker(die, bufio.NewReader(f), templateConfig, sr)
+		lineWorker(die, f, templateConfig, sr)
 	default:
 		log.Fatalf("cannot comprehend protocol %v specified in "+
 			"servedb.", sr.protocol)
