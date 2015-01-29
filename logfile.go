@@ -33,6 +33,8 @@ func lineWorker(die dieCh, f *os.File, cfg logplexc.Config, sr *serveRecord) {
 	go func() {
 		for {
 			select {
+			case <-die:
+				return
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					for {
