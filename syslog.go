@@ -10,8 +10,6 @@ import (
 )
 
 func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config, sr *serveRecord) {
-	os.Remove(sr.P)
-
 	// Make world-writable so anything can connect and send logs.
 	// This may be be worth locking down more, but as-is unless
 	// pg_logplexcollector and the Postgres server share the same

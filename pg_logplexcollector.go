@@ -29,10 +29,12 @@ func listen(die dieCh, sr *serveRecord) {
 
 	switch sr.protocol {
 	case "syslog":
+		os.Remove(sr.P)
 		pc, err = net.ListenPacket("unixgram", sr.P)
 	case "logfile":
 		f, err = os.Open(sr.P)
 	default:
+		os.Remove(sr.P)
 		l, err = net.Listen("unix", sr.P)
 	}
 
