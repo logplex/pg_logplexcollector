@@ -24,7 +24,7 @@ func lineWorker(die dieCh, f *os.File, cfg logplexc.Config, sr *serveRecord) {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("can't create watcher: %v", err)
 	}
 	defer watcher.Close()
 
@@ -47,18 +47,18 @@ func lineWorker(die dieCh, f *os.File, cfg logplexc.Config, sr *serveRecord) {
 							if err == io.EOF {
 								break
 							}
-							log.Fatal(err)
+							log.Printf("unexpected read error: %v", err)
 						}
 					}
 				}
 			case err := <-watcher.Errors:
-				log.Fatal(err)
+				log.Printf("unexpected fs watch error %v:", err)
 			}
 		}
 	}()
 
 	if err := watcher.Add(f.Name()); err != nil {
-		log.Fatal(err)
+		log.Printf("can't add watcher: %v", err)
 	}
 
 	<-die
