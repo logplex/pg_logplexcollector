@@ -12,7 +12,7 @@ import (
 	"github.com/logplex/logplexc"
 )
 
-var prefix = regexp.MustCompile(`^(\[\d*\] [^-*#]+|.*)`)
+var prefix = regexp.MustCompile(`([-*#] .*)`)
 
 func lineWorker(die dieCh, f *os.File, cfg logplexc.Config, sr *serveRecord) {
 	cfg.Logplex = sr.u
@@ -39,7 +39,7 @@ func lineWorker(die dieCh, f *os.File, cfg logplexc.Config, sr *serveRecord) {
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					for {
 						l, err := r.ReadBytes('\n')
-						m := prefix.ReplaceAll(l, []byte(""))
+						m := prefix.Find(l)
 						if len(m) > 1 {
 							target.BufferMessage(134, time.Now(), "redis",
 								sr.Name, m)
