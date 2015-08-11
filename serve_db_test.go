@@ -47,12 +47,12 @@ var fixtures = []fixturePair{
 			{sKey{I: "apple", P: "/p1/log.sock"},
 				mustParseURL(
 					"https://token:chocolate@localhost"),
-				nil, "logfebe",
+				nil, "logfebe", "postgres", "[purple-rain-1984]",
 				"brown"},
 			{sKey{I: "banana", P: "/p2/log.sock"},
 				mustParseURL(
 					"https://token:vanilla@localhost"),
-				nil, "logfebe",
+				nil, "logfebe", "postgres", "[purple-rain-1984]",
 				"white"},
 		},
 	},
@@ -68,12 +68,12 @@ var fixtures = []fixturePair{
 			{sKey{I: "bed", P: "/p1/log.sock"},
 				mustParseURL(
 					"https://token:pillow@localhost"),
-				nil, "logfebe",
+				nil, "logfebe", "postgres", "[purple-rain-1984]",
 				"white"},
 			{sKey{I: "nightstand", P: "/p2/log.sock"},
 				mustParseURL(
 					"https://token:alarm-clock@localhost"),
-				nil, "logfebe",
+				nil, "logfebe", "postgres", "[purple-rain-1984]",
 				"black"},
 		},
 	},
