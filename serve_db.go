@@ -82,7 +82,6 @@ type serveRecord struct {
 	protocol string
 
 	// Auxiliary fields for formatting
-	Name    string
 	Service string
 	Prefix  string
 }
@@ -434,13 +433,12 @@ func projectFromJSON(v interface{}) (*serveRecord, error) {
 	}
 
 	// Optional fields: okay to not explode if not present.
-	name, _ := lookup("name")
 	service, _ := lookup("service")
 	prefix, _ := lookup("prefix")
 
 	return &serveRecord{sKey: sKey{P: path, I: ident},
 		u: *u, audit: audit, protocol: proto,
-		Name: name, Service: service, Prefix: prefix}, nil
+		Service: service, Prefix: prefix}, nil
 }
 
 func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {

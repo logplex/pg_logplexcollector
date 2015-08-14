@@ -261,11 +261,9 @@ func emitLogRecord(lr *logRecord, sr *serveRecord, target *logplexc.Client,
 		}
 	}
 
-	if sr.Name != "" {
-		// If available, identify what agent is doing the
-		// logging to aid human readers in determining where a
-		// log message came from.
-		msgFmtBuf.WriteString("[" + sr.Name + "] ")
+	if sr.Prefix != "" {
+		msgFmtBuf.WriteString(sr.Prefix)
+		msgFmtBuf.WriteString(" ")
 	}
 
 	if isAudit {
