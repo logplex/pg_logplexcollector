@@ -32,7 +32,20 @@ func listen(die dieCh, sr *serveRecord) {
 		os.Remove(sr.P)
 		pc, err = net.ListenPacket("unixgram", sr.P)
 	case "logfile":
-		f, err = os.Open(sr.P)
+		i := 0
+		for {
+			f, err = os.Open(sr.P)
+			if err != nil {
+				if i < 15 {
+					log.Println("cannot open pipe", err)
+					time.Sleep(1 * time.Second)
+					i++
+					continue
+				}
+				break
+			}
+			break
+		}
 	default:
 		os.Remove(sr.P)
 		l, err = net.Listen("unix", sr.P)
