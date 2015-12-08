@@ -1,0 +1,5 @@
+pglogplexcollector (0.5) precise; urgency=medium
+
+  * Initial release.
+
+ -- Greg Bureke <gregburek@heroku.com>  Tue, 08 Dec 2015 01:22:12 +0000
