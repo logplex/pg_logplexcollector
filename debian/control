@@ -3,12 +3,7 @@ Section: devel
 Priority: extra
 Maintainer: Heroku Department of Data <dod@heroku.com>
 Uploaders: Greg Burek <gregburek@heroku.com>
-Build-Depends: debhelper (>= 9),
-               dh-golang,
-               golang-go,
-               golang-github-deafbybeheading-femebe-dev,
-               golang-github-go-fsnotify-fsnotify-dev,
-               golang-github-logplex-logplexc-dev
+Build-Depends: debhelper (>= 8.0.0), dh-golang, git, liblz4-dev
 Standards-Version: 3.9.6
 Homepage: https://github.com/heroku/pg_logplexcollector
 XS-Go-Import-Path: github.com/heroku/pg_logplexcollector
