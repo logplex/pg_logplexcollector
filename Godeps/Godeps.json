@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/logplex/pg_logplexcollector",
+	"ImportPath": "github.com/heroku/pg_logplexcollector",
 	"GoVersion": "devel +f8b50ad4cac4 Mon Apr 21 17:00:27 2014 -0700 +",
 	"Packages": [
 		"./..."
