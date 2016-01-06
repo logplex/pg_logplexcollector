@@ -45,6 +45,11 @@ func NewShuttle(cfg *LoggerConfig) (*Shuttle, error) {
 	conf.Appname = token
 	conf.Hostname = cfg.Hostname
 	conf.Procid = cfg.ProcID
+	conf.FrontBuff = 100
+	conf.NumBatchers = 1
+	conf.NumOutlets = 1
+	conf.BackBuff = 100
+	conf.BatchSize = 100
 	conf.InputFormat = shuttle.InputFormatRFC5424
 	conf.ComputeHeader()
 
@@ -70,6 +75,5 @@ func (s *Shuttle) Log(log []byte, host, procID string, when time.Time) {
 
 // Close close the shuttle
 func (s *Shuttle) Close() {
-	s.WaitForReadersToFinish()
 	s.Land()
 }
