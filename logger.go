@@ -1,14 +1,13 @@
 package main
 
 import (
-	"crypto/tls"
 	"errors"
-	"net/http"
+	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/heroku/log-shuttle"
-	"github.com/logplex/logplexc"
 )
 
 // LoggerConfig represents a logger config.
@@ -18,15 +17,19 @@ type LoggerConfig struct {
 	ProcID   string
 }
 
+const priority = 134
+
 // Logger represents a logger client.
 type Logger interface {
-	BufferMessage(priority int, when time.Time, host string, procID string, log []byte) error
+	Log(log []byte, host, procID string, when time.Time)
 	Close()
 }
 
 // Shuttle is a logger client using log-shuttle.
 type Shuttle struct {
 	*shuttle.Shuttle
+
+	Appname string
 }
 
 // NewShuttle creates a shuttle client from a Config.
@@ -42,41 +45,31 @@ func NewShuttle(cfg *LoggerConfig) (*Shuttle, error) {
 	conf.Appname = token
 	conf.Hostname = cfg.Hostname
 	conf.Procid = cfg.ProcID
+	conf.InputFormat = shuttle.InputFormatRFC5424
 	conf.ComputeHeader()
 
 	// Create shuttle.
 	s := shuttle.NewShuttle(conf)
 	s.Launch()
-	return &Shuttle{s}, nil
+	return &Shuttle{
+		Shuttle: s,
+		Appname: conf.Appname,
+	}, nil
 }
 
-// BufferMessage enqueues the given log.
-func (s *Shuttle) BufferMessage(priority int, when time.Time, host string, procID string, log []byte) error {
-	s.Enqueue(shuttle.NewLogLine(log, when))
-	return nil
+// Log enqueues the given log.
+func (s *Shuttle) Log(log []byte, host, procID string, when time.Time) {
+	ts := when.UTC().Format(time.RFC3339)
+	syslogPrefix := "<" + strconv.Itoa(priority) + ">1 " + ts + " " +
+		host + " " + s.Appname + " " + procID + " - - "
+
+	l := fmt.Sprintf("%s%s", syslogPrefix, log)
+	ll := shuttle.NewLogLine([]byte(l), when)
+	s.Enqueue(ll)
 }
 
 // Close close the shuttle
 func (s *Shuttle) Close() {
 	s.WaitForReadersToFinish()
 	s.Land()
-}
-
-// NewLogplex creates a new logplexc Client from a Config.
-func NewLogplex(cfg *LoggerConfig) (*logplexc.Client, error) {
-	client := *http.DefaultClient
-	client.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-
-	config := &logplexc.Config{
-		HttpClient:         client,
-		RequestSizeTrigger: 100 * KB,
-		Concurrency:        3,
-		Period:             time.Second / 4,
-	}
-
-	return logplexc.NewClient(config)
 }

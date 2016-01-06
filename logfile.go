@@ -35,6 +35,7 @@ func lineWorker(die dieCh, f *os.File, cfg *LoggerConfig, sr *serveRecord) {
 		for {
 			select {
 			case <-die:
+				target.Close()
 				return
 			case event := <-watcher.Events:
 				if event.Op&fsnotify.Write == fsnotify.Write {
@@ -53,8 +54,7 @@ func lineWorker(die dieCh, f *os.File, cfg *LoggerConfig, sr *serveRecord) {
 						l = append([]byte(fmt.Sprintf("%s ", sr.Prefix)), l...)
 
 						// Send the log line
-						target.BufferMessage(134, time.Now(), sr.Service,
-							sr.Service, l)
+						target.Log(l, sr.Service, sr.Service, time.Now())
 
 						if err != nil {
 							if err == io.EOF {

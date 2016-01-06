@@ -10,10 +10,6 @@
 			"Rev": "0e34380154350837930e60dd33b358b32d450233"
 		},
 		{
-			"ImportPath": "github.com/logplex/logplexc",
-			"Rev": "502c237239b3264b15e83ef411be39a1e362dc36"
-		},
-		{
 			"ImportPath": "github.com/go-fsnotify/fsnotify",
 			"Comment": "v1.1.0-11-g8f4d598",
 			"Rev": "8f4d59892a7165d85442ef9d4d701ef80c4466df"

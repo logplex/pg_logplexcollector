@@ -2,12 +2,12 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -276,13 +276,8 @@ func emitLogRecord(lr *logRecord, sr *serveRecord, target Logger,
 	catOptionalField("Hint", lr.ErrHint)
 	catOptionalField("Query", lr.UserQuery)
 
-	err := target.BufferMessage(134, time.Now(),
-		"postgres",
-		"postgres."+strconv.Itoa(int(lr.Pid)),
-		msgFmtBuf.Bytes())
-	if err != nil {
-		exit(err)
-	}
+	target.Log(msgFmtBuf.Bytes(), "postgres",
+		fmt.Sprintf("postgres.%d", int(lr.Pid)), time.Now())
 }
 
 // Read the version message, calling exit if this is not a supported

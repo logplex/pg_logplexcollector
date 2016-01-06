@@ -30,6 +30,8 @@ func syslogWorker(die dieCh, conn net.PacketConn, cfg *LoggerConfig, sr *serveRe
 	cfg.URL = sr.u
 
 	buf := make([]byte, 9*KB)
+	cfg.Hostname = "audit"
+	cfg.ProcID = "-"
 	target, err := NewShuttle(cfg)
 	if err != nil {
 		log.Fatalf("could not create auditing client: %v", err)
@@ -38,6 +40,7 @@ func syslogWorker(die dieCh, conn net.PacketConn, cfg *LoggerConfig, sr *serveRe
 	for {
 		select {
 		case <-die:
+			target.Close()
 			return
 		default:
 			break
@@ -53,10 +56,8 @@ func syslogWorker(die dieCh, conn net.PacketConn, cfg *LoggerConfig, sr *serveRe
 			// Just send the message wholesale, which
 			// leads to some weird syslog-in-syslog
 			// framing, but perhaps it's good enough.
-			target.BufferMessage(134, time.Now(),
-				"audit", "-", append([]byte(
-					"instance_type=shogun identity="+
-						sr.I+" "), buf[:n]...))
+			target.Log(append([]byte("instance_type=shogun identity="+sr.I+" "),
+				buf[:n]...), "audit", "-", time.Now())
 		}
 
 		if err != nil {
