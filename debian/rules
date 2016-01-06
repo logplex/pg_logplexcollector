@@ -3,6 +3,11 @@
 export DH_OPTIONS
 export DH_GOPKG := github.com/heroku/pg_logplexcollector
 
+override_dh_auto_install:
+	dh_auto_install
+	dh_installinit --no-start --upstart-only --name=pg_logplexcollector
+	dh_installinit --no-start --upstart-only --name=pg_logplexcollector_rundir
+
 %:
 	dh $@ --buildsystem=golang --with=golang
 

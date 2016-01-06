@@ -1,0 +1,23 @@
+description     "pg_logplexcollector_rundir"
+
+start on runlevel [2345]
+console log
+
+pre-start script
+  set -ue
+
+  # /var/run/pg_logplexcollector needs to be created as a privileged
+  # user, so it is done in this separate upstart job.  The
+  # pg_logplexcollector upstart job runs as an unprivileged job (and
+  # thus cannot create directories in /var/run), with setuid/setgid.
+  rundir=/var/run/pg_logplexcollector
+  [ -d "$rundir" ] || install -m 755 \
+    -o pg_logplexcollector -g pg_logplexcollector -d "$rundir"
+
+  initctl emit pg_logplexcollector_rundir_created
+end script
+
+script
+end script
+
+emits pg_logplexcollector_rundir_created

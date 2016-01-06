@@ -1,0 +1,32 @@
+description     "pg_logplexcollector"
+
+start on pg_logplexcollector_rundir_created
+stop on runlevel [016]
+
+console log
+
+chdir "/var/lib/pg_logplexcollector"
+
+setuid pg_logplexcollector
+setgid pg_logplexcollector
+
+env SERVE_DB_DIR="/var/lib/pg_logplexcollector"
+
+script
+  set -ue
+
+  # Set up logger pulling from a fifo, directing it both stderr and
+  # stdout.
+  rundir=/var/run/pg_logplexcollector
+  log=$rundir/log
+
+  rm -f "$log"
+  mkfifo "$log"
+  ( logger -t pg_logplexcollector < "$log" & )
+
+  exec /usr/bin/pg_logplexcollector/pg_logplexcollector > "$log" 2>&1
+end script
+
+# Respawn when dying
+respawn
+respawn limit 15 5
