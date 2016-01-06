@@ -24,7 +24,7 @@ script
   mkfifo "$log"
   ( logger -t pg_logplexcollector < "$log" & )
 
-  exec /usr/bin/pg_logplexcollector/pg_logplexcollector > "$log" 2>&1
+  exec /usr/bin/pg_logplexcollector > "$log" 2>&1
 end script
 
 # Respawn when dying
