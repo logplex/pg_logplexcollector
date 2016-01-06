@@ -5,11 +5,9 @@ import (
 	"net"
 	"os"
 	"time"
-
-	"github.com/logplex/logplexc"
 )
 
-func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config, sr *serveRecord) {
+func syslogWorker(die dieCh, conn net.PacketConn, cfg *LoggerConfig, sr *serveRecord) {
 	// Make world-writable so anything can connect and send logs.
 	// This may be be worth locking down more, but as-is unless
 	// pg_logplexcollector and the Postgres server share the same
@@ -29,10 +27,10 @@ func syslogWorker(die dieCh, conn net.PacketConn, cfg logplexc.Config, sr *serve
 			sr.P, err)
 	}
 
-	cfg.Logplex = sr.u
+	cfg.URL = sr.u
 
 	buf := make([]byte, 9*KB)
-	target, err := logplexc.NewClient(&cfg)
+	target, err := NewShuttle(cfg)
 	if err != nil {
 		log.Fatalf("could not create auditing client: %v", err)
 	}

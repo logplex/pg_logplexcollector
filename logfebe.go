@@ -13,7 +13,6 @@ import (
 
 	"github.com/deafbybeheading/femebe/buf"
 	"github.com/deafbybeheading/femebe/core"
-	"github.com/logplex/logplexc"
 )
 
 // A function that, when called, panics.  The provider of the function
@@ -34,7 +33,7 @@ type exitFn func(args ...interface{})
 // filled message.
 type msgInit func(dst *core.Message, exit exitFn)
 
-func logWorker(die dieCh, l net.Listener, cfg logplexc.Config, sr *serveRecord) {
+func logWorker(die dieCh, l net.Listener, cfg *LoggerConfig, sr *serveRecord) {
 	// Make world-writable so anything can connect and send logs.
 	// This may be be worth locking down more, but as-is unless
 	// pg_logplexcollector and the Postgres server share the same
@@ -127,22 +126,21 @@ func logWorker(die dieCh, l net.Listener, cfg logplexc.Config, sr *serveRecord) 
 			}
 
 			// Set up client with serve
-			client := func(cfg logplexc.Config, url *url.URL) *logplexc.Client {
-				cfg.Logplex = *url
-				client, err := logplexc.NewClient(&cfg)
+			client := func(cfg *LoggerConfig, url url.URL) Logger {
+				cfg.URL = url
+				client, err := NewShuttle(cfg)
 				if err != nil {
 					exit(err)
 				}
-
 				return client
 			}
 
-			primary := client(cfg, &sr.u)
+			primary := client(cfg, sr.u)
 
-			var audit *logplexc.Client
+			var audit Logger
 
 			if sr.audit != nil {
-				audit = client(cfg, sr.audit)
+				audit = client(cfg, *sr.audit)
 			}
 
 			defer func() {
@@ -159,7 +157,7 @@ func logWorker(die dieCh, l net.Listener, cfg logplexc.Config, sr *serveRecord) 
 }
 
 // Process a log message, sending it to the client.
-func processLogMsg(die dieCh, primary *logplexc.Client, audit *logplexc.Client,
+func processLogMsg(die dieCh, primary Logger, audit Logger,
 	msgInit msgInit, sr *serveRecord, exit exitFn) {
 	var m core.Message
 
@@ -199,9 +197,9 @@ func processLogMsg(die dieCh, primary *logplexc.Client, audit *logplexc.Client,
 
 // Process a single logRecord value, buffering it in the logplex
 // client.
-func routeLogRecord(lr *logRecord, primary *logplexc.Client,
-	audit *logplexc.Client, sr *serveRecord, exit exitFn) {
-	var targets []*logplexc.Client
+func routeLogRecord(lr *logRecord, primary Logger,
+	audit Logger, sr *serveRecord, exit exitFn) {
+	var targets []Logger
 	hasAudit := false
 
 	// Find error messages that look like connection auditing
@@ -213,13 +211,13 @@ func routeLogRecord(lr *logRecord, primary *logplexc.Client,
 		case strings.HasPrefix(*lr.ErrMessage, "connection authorized: "):
 			fallthrough
 		case strings.HasPrefix(*lr.ErrMessage, "replication connection authorized: "):
-			targets = []*logplexc.Client{audit}
+			targets = append(targets, audit)
 			hasAudit = true
 		default:
-			targets = []*logplexc.Client{primary}
+			targets = append(targets, primary)
 		}
 	} else {
-		targets = []*logplexc.Client{primary}
+		targets = append(targets, primary)
 	}
 
 	// For interesting SQLState errors, *also* send them to the
@@ -243,7 +241,7 @@ func routeLogRecord(lr *logRecord, primary *logplexc.Client,
 	}
 }
 
-func emitLogRecord(lr *logRecord, sr *serveRecord, target *logplexc.Client,
+func emitLogRecord(lr *logRecord, sr *serveRecord, target Logger,
 	isAudit bool, exit exitFn) {
 	// Buffer to format the complete log message in.
 	msgFmtBuf := bytes.Buffer{}

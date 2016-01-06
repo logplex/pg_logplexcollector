@@ -11,15 +11,14 @@ import (
 	"time"
 
 	"github.com/go-fsnotify/fsnotify"
-	"github.com/logplex/logplexc"
 )
 
 var redisPrefix = regexp.MustCompile(`([-*#] .*)`)
 
-func lineWorker(die dieCh, f *os.File, cfg logplexc.Config, sr *serveRecord) {
-	cfg.Logplex = sr.u
+func lineWorker(die dieCh, f *os.File, cfg *LoggerConfig, sr *serveRecord) {
+	cfg.URL = sr.u
 
-	target, err := logplexc.NewClient(&cfg)
+	target, err := NewShuttle(cfg)
 	if err != nil {
 		log.Fatalf("could not create logging client: %v", err)
 	}

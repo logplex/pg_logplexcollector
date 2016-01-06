@@ -1,15 +1,11 @@
 package main
 
 import (
-	"crypto/tls"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"time"
-
-	"github.com/logplex/logplexc"
 )
 
 const (
@@ -57,31 +53,19 @@ func listen(die dieCh, sr *serveRecord) {
 			sr.P, err)
 	}
 
-	// Create a template config in each listening goroutine, for a
-	// tiny bit more defensive programming against accidental
-	// mutations of the base template that could cause
-	// cross-tenant spillage.
-	client := *http.DefaultClient
-	client.Transport = &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-
-	templateConfig := logplexc.Config{
-		HttpClient:         client,
-		RequestSizeTrigger: 100 * KB,
-		Concurrency:        3,
-		Period:             time.Second / 4,
+	cfg := &LoggerConfig{
+		URL:      sr.u,
+		Hostname: sr.Service,
+		ProcID:   sr.Service,
 	}
 
 	switch sr.protocol {
 	case "logfebe":
-		logWorker(die, l, templateConfig, sr)
+		logWorker(die, l, cfg, sr)
 	case "syslog":
-		go syslogWorker(die, pc, templateConfig, sr)
+		go syslogWorker(die, pc, cfg, sr)
 	case "logfile":
-		lineWorker(die, f, templateConfig, sr)
+		lineWorker(die, f, cfg, sr)
 	default:
 		log.Fatalf("cannot comprehend protocol %v specified in "+
 			"servedb.", sr.protocol)
