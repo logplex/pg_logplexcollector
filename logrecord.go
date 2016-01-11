@@ -15,7 +15,7 @@ type logRecord struct {
 	DatabaseName     *string
 	Pid              int32
 	ClientAddr       *string
-	SessionId        string
+	SessionID        string
 	SeqNum           int64
 	PsDisplay        *string
 	SessionStart     string
@@ -74,7 +74,7 @@ func (lr *logRecord) oneLine() []byte {
 	wd()
 	wns("ClientAddr", lr.ClientAddr)
 	wd()
-	ws("SessionId", lr.SessionId)
+	ws("SessionId", lr.SessionID)
 	wd()
 	wnum("SeqNum", lr.SeqNum)
 	wd()
@@ -220,7 +220,7 @@ func parseLogRecord(
 	dst.DatabaseName = nextNullableString()
 	dst.Pid = nextInt32()
 	dst.ClientAddr = nextNullableString()
-	dst.SessionId = nextString()
+	dst.SessionID = nextString()
 	dst.SeqNum = nextInt64()
 	dst.PsDisplay = nextNullableString()
 	dst.SessionStart = nextString()

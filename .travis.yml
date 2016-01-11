@@ -1,0 +1,43 @@
+language: go
+sudo: required
+services:
+  - docker
+go:
+  - 1.5
+env:
+  global:
+    - COMPOSE_VERSION=1.5.1
+before_install:
+  - curl -L https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` > docker-compose
+  - chmod +x docker-compose
+  - sudo mv docker-compose /usr/local/bin
+before_script:
+  - go get golang.org/x/tools/cmd/cover
+  - go get golang.org/x/tools/cmd/vet
+script:
+  - go vet ./... && go test -cover ./...
+before_deploy:
+  - docker-compose up
+deploy:
+  - provider: packagecloud
+    package_glob: precise/*.deb
+    dist: ubuntu/precise
+    username: heroku
+    repository: dod
+    token:
+      secure: fbHjpJBxSif6B7qm93r+kSLx7e0rGgzl2UUJhqpU4MBItpSWwtp0CmpEbm+zr+1LkUiJ8PNDDxnsS711ymPagH+Vzc2N1iDUzQP0dc/ReEVYI38jTVc6YcFRh1glvowE1T8ySYKWnxupuzJLHzpHZ5CtSNQs9Rmcx1/8Q5PdsVE=
+    skip_cleanup: true
+    on:
+      tags: true
+  - provider: packagecloud
+    package_glob: trusty/*.deb
+    dist: ubuntu/trusty
+    username: heroku
+    repository: dod
+    token:
+      secure: fbHjpJBxSif6B7qm93r+kSLx7e0rGgzl2UUJhqpU4MBItpSWwtp0CmpEbm+zr+1LkUiJ8PNDDxnsS711ymPagH+Vzc2N1iDUzQP0dc/ReEVYI38jTVc6YcFRh1glvowE1T8ySYKWnxupuzJLHzpHZ5CtSNQs9Rmcx1/8Q5PdsVE=
+    skip_cleanup: true
+    on:
+      tags: true
+notifications:
+  email: false
