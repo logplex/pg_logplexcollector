@@ -1,0 +1,11 @@
+pglogplexcollector (0.5ubuntu1) precise; urgency=medium
+
+  * Update for correct build golang sha1
+
+ -- Greg Burek <gregburek@heroku.com>  Fri, 11 Dec 2015 01:04:22 +0000
+
+pglogplexcollector (0.5) precise; urgency=medium
+
+  * Initial release.
+
+ -- Greg Burek <gregburek@heroku.com>  Tue, 08 Dec 2015 01:22:12 +0000

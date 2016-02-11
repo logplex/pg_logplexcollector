@@ -41,10 +41,16 @@
 //     {"serves": [
 //          {"i": "identity1",
 //           "url": "https://token:token-1@some-host.io/logs",
+//           "audit": "https://token:token-1@audit-host.io/logs"
 //           "p": "/var/run/cluster1/log.sock"},
 //          {"i": "identity1",
 //           "url": "https://token:token-2@some-host.io/logs",
+//           "audit": "https://token:token-1@audit-host.io/logs"
 //           "p": "/var/run/cluster2/log.sock"},
+//          {"i": "identity1",
+//           "protocol": "syslog",
+//           "url": "https://token:token-2@some-host.io/logs",
+//           "p": "/var/run/syslog-forward"},
 //       ]
 //     }
 //
@@ -71,10 +77,13 @@ type sKey struct {
 
 type serveRecord struct {
 	sKey
-	u url.URL
+	u        url.URL
+	audit    *url.URL
+	protocol string
 
 	// Auxiliary fields for formatting
-	Name string
+	Service string
+	Prefix  string
 }
 
 type serveDb struct {
@@ -133,7 +142,7 @@ func (t *serveDb) Snapshot() []serveRecord {
 
 	for _, v := range t.identToServe {
 		snap[i] = *v
-		i += 1
+		i++
 	}
 
 	// Recheck in case of race conditions.  Array bounds checking
@@ -352,7 +361,7 @@ func (t *serveDb) reject(submitPath string, nonfatale error) (err error) {
 	return nil
 }
 
-func projectFromJson(v interface{}) (*serveRecord, error) {
+func projectFromJSON(v interface{}) (*serveRecord, error) {
 	maybeMap, ok := v.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf(
@@ -391,16 +400,45 @@ func projectFromJson(v interface{}) (*serveRecord, error) {
 		return nil, err
 	}
 
+	audit, err := func() (*url.URL, error) {
+		// Parse optional auditing field: an error is okay
+		// here.
+		auditText, err := lookup("audit")
+		if err != nil {
+			return nil, nil
+		}
+
+		// Should the audit key be present, a non-valid URL is
+		// sufficient reason to call the file invalid.
+		audit, err := url.Parse(auditText)
+		if err != nil {
+			return nil, err
+		}
+
+		return audit, nil
+	}()
+
+	if err != nil {
+		return nil, err
+	}
+
 	ident, err := lookup("i")
 	if err != nil {
 		return nil, err
 	}
 
+	proto, err := lookup("protocol")
+	if err != nil {
+		proto = "logfebe"
+	}
+
 	// Optional fields: okay to not explode if not present.
-	name, _ := lookup("name")
+	service, _ := lookup("service")
+	prefix, _ := lookup("prefix")
 
 	return &serveRecord{sKey: sKey{P: path, I: ident},
-		u: *u, Name: name}, nil
+		u: *u, audit: audit, protocol: proto,
+		Service: service, Prefix: prefix}, nil
 }
 
 func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {
@@ -430,7 +468,7 @@ func (t *serveDb) parse(contents []byte) (map[sKey]*serveRecord, error) {
 	// ought to be.
 	newMapping := make(map[sKey]*serveRecord)
 	for _, val := range maybeList {
-		rec, err := projectFromJson(val)
+		rec, err := projectFromJSON(val)
 		if err != nil {
 			return nil, err
 		}

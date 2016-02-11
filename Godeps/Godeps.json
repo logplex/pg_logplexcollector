@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/logplex/pg_logplexcollector",
+	"ImportPath": "github.com/heroku/pg_logplexcollector",
 	"GoVersion": "devel +f8b50ad4cac4 Mon Apr 21 17:00:27 2014 -0700 +",
 	"Packages": [
 		"./..."
@@ -12,6 +12,11 @@
 		{
 			"ImportPath": "github.com/logplex/logplexc",
 			"Rev": "502c237239b3264b15e83ef411be39a1e362dc36"
+		},
+		{
+			"ImportPath": "github.com/go-fsnotify/fsnotify",
+			"Comment": "v1.1.0-11-g8f4d598",
+			"Rev": "8f4d59892a7165d85442ef9d4d701ef80c4466df"
 		}
 	]
 }

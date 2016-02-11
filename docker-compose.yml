@@ -1,0 +1,36 @@
+trusty:
+  build: ./docker/trusty
+  environment:
+    DEBFULLNAME: "Department of Data"
+    DEBEMAIL: "dod@heroku.com"
+    UBUMAIL: "dod@heroku.com"
+    DEBUILD_DPKG_BUILDPACKAGE_OPTS: "-us -uc"
+    LANG: "C.UTF-8"
+    GOPATH: "/usr/share/gocode"
+  command: >
+    bash -c 'go get github.com/tools/godep
+    && /usr/share/gocode/bin/godep restore
+    && dpkg-buildpackage -us -uc -b
+    && cp ../*.deb /pkg/deb'
+  working_dir: /pkg/src
+  volumes:
+    - ".:/pkg/src"
+    - "./trusty:/pkg/deb"
+precise:
+  build: ./docker/precise
+  environment:
+    DEBFULLNAME: "Department of Data"
+    DEBEMAIL: "dod@heroku.com"
+    UBUMAIL: "dod@heroku.com"
+    DEBUILD_DPKG_BUILDPACKAGE_OPTS: "-us -uc"
+    LANG: "C.UTF-8"
+    GOPATH: "/usr/share/gocode"
+  command: >
+    bash -c 'go get github.com/tools/godep
+    && /usr/share/gocode/bin/godep restore
+    && dpkg-buildpackage -us -uc -b
+    && cp ""../*.deb /pkg/deb'
+  working_dir: /pkg/src
+  volumes:
+    - ".:/pkg/src"
+    - "./precise:/pkg/deb"

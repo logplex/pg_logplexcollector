@@ -1,20 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"crypto/tls"
-	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"time"
 
-	"github.com/deafbybeheading/femebe/buf"
-	"github.com/deafbybeheading/femebe/core"
 	"github.com/logplex/logplexc"
 )
 
@@ -23,260 +17,43 @@ const (
 	MB = 1048576
 )
 
-// A function that, when called, panics.  The provider of the function
-// is assumed to be able to recover from the panic, usually by using a
-// sentinel value to ensure that only panics as a result of calling
-// the exitFn is called.
-//
-// If an exitFn is part of the parameter list for a function, it is
-// customary for it not to have an error return.
-//
-// This is useful when it's fairly clear that an error should be
-// handled in one part of a program all the time, e.g. abort a
-// goroutine after logging the cause of the exit.
-type exitFn func(args ...interface{})
-
-// Fills a message on behalf of the caller.  Often the closure will
-// close over a core.MessageStream to provide a source of data for the
-// filled message.
-type msgInit func(dst *core.Message, exit exitFn)
-
 // Used only in the close-to-broadcast style to exit goroutines.
 type dieCh <-chan struct{}
 
-// Read the version message, calling exit if this is not a supported
-// version.
-func processVerMsg(msgInit msgInit, exit exitFn) {
-	var m core.Message
-
-	msgInit(&m, exit)
-
-	if m.MsgType() != 'V' {
-		exit("expected version ('V') message, "+
-			"but received %c", m.MsgType())
-	}
-
-	// hard-coded lengh limit, but it's very generous
-	if m.Size() > 10*KB {
-		log.Printf("oversized message string, msg size is %d",
-			m.Size())
-	}
-
-	s, err := buf.ReadCString(m.Payload())
-	if err != nil {
-		exit("couldn't read version string: %v", err)
-	}
-
-	if !(strings.HasPrefix(s, "PG-9.2") ||
-		strings.HasPrefix(s, "PG-9.3") ||
-		strings.HasPrefix(s, "PG-9.4")) ||
-		!strings.HasSuffix(s, "/logfebe-1") {
-		exit("protocol version not supported: %s", s)
-	}
-}
-
-// Process the identity ('I') message, reporting the identity therein.
-func processIdentMsg(msgInit msgInit, exit exitFn) string {
-	var m core.Message
-
-	msgInit(&m, exit)
-
-	// Read the remote system identifier string
-	if m.MsgType() != 'I' {
-		exit("expected identification ('I') message, "+
-			"but received %c", m.MsgType())
-	}
-
-	// hard-coded lengh limit, but it's very generous
-	if m.Size() > 10*KB {
-		log.Printf("oversized message string, msg size is %d",
-			m.Size())
-	}
-
-	s, err := buf.ReadCString(m.Payload())
-	if err != nil {
-		exit("couldn't read identification string: %v",
-			err)
-	}
-
-	return s
-}
-
-// Process a log message, sending it to the client.
-func processLogMsg(die dieCh, lpc *logplexc.Client, msgInit msgInit,
-	sr *serveRecord, exit exitFn) {
-	var m core.Message
-
-	for {
-		// Poll request to exit
-		select {
-		case <-die:
-			return
-		default:
-			break
-		}
-
-		msgInit(&m, exit)
-
-		// Refuse to handle any log message above an arbitrary
-		// size.  Furthermore, exit the worker, closing the0
-		// connection, so that the client doesn't even bother
-		// to wait for this process to drain the oversized
-		// item and anything following it; these will be
-		// dropped.  It's on the client to gracefully handle
-		// the error and re-connect after this happens.
-		if m.Size() > 1*MB {
-			exit("client %q sent oversized log record")
-		}
-
-		payload, err := m.Force()
-		if err != nil {
-			exit("could not retrieve payload of message: %v",
-				err)
-		}
-
-		var lr logRecord
-		parseLogRecord(&lr, payload, exit)
-		processLogRec(&lr, lpc, sr, exit)
-	}
-}
-
-// Process a single logRecord value, buffering it in the logplex
-// client.
-func processLogRec(lr *logRecord, lpc *logplexc.Client, sr *serveRecord,
-	exit exitFn) {
-	// Buffer to format the complete log message in.
-	msgFmtBuf := bytes.Buffer{}
-
-	// Helps with formatting a series of nullable strings.
-	catOptionalField := func(prefix string, maybePresent *string) {
-		if maybePresent != nil {
-			if prefix != "" {
-				msgFmtBuf.WriteString(prefix)
-				msgFmtBuf.WriteString(": ")
-			}
-
-			msgFmtBuf.WriteString(*maybePresent)
-			msgFmtBuf.WriteByte('\n')
-		}
-	}
-
-	if sr.Name != "" {
-		// If available, identify what agent is doing the
-		// logging to aid human readers in determining where a
-		// log message came from.
-		msgFmtBuf.WriteString("[" + sr.Name + "] ")
-	}
-
-	catOptionalField("", lr.ErrMessage)
-	catOptionalField("Detail", lr.ErrDetail)
-	catOptionalField("Hint", lr.ErrHint)
-	catOptionalField("Query", lr.UserQuery)
-
-	err := lpc.BufferMessage(134, time.Now(),
-		"postgres",
-		"postgres."+strconv.Itoa(int(lr.Pid)),
-		msgFmtBuf.Bytes())
-	if err != nil {
-		exit(err)
-	}
-}
-
-func logWorker(die dieCh, rwc io.ReadWriteCloser, cfg logplexc.Config,
-	sr *serveRecord) {
-	var err error
-	stream := core.NewBackendStream(rwc)
-
-	var exit exitFn
-	exit = func(args ...interface{}) {
-		if len(args) == 1 {
-			log.Printf("Disconnect client: %v", args[0])
-		} else if len(args) > 1 {
-			if s, ok := args[0].(string); ok {
-				log.Printf(s, args[1:]...)
-			} else {
-				// Not an intended use case, but do
-				// one's best to print something.
-				log.Printf("Got a malformed exit: %v", args)
-			}
-		}
-
-		panic(&exit)
-	}
-
-	// Recovers from panic and exits in an orderly manner if (and
-	// only if) exit() is called; otherwise propagate the panic
-	// normally.
-	defer func() {
-		rwc.Close()
-
-		// &exit is used as a sentinel value.
-		if r := recover(); r != nil && r != &exit {
-			panic(r)
-		}
-	}()
-
-	var msgInit msgInit
-	msgInit = func(m *core.Message, exit exitFn) {
-		err = stream.Next(m)
-		if err == io.EOF {
-			exit("postgres client disconnects")
-		} else if err != nil {
-			exit("could not read next message: %v", err)
-		}
-	}
-
-	// Protocol start-up; packets that are only received once.
-	processVerMsg(msgInit, exit)
-	ident := processIdentMsg(msgInit, exit)
-	log.Printf("client connects with identifier %q", ident)
-
-	// Resolve the identifier to a serve
-	if sr.I != ident {
-		exit("got unexpected identifier for socket: "+
-			"path %s, expected %s, got %s", sr.P, sr.I, ident)
-	}
-
-	// Set up client with serve
-	cfg.Logplex = sr.u
-	client, err := logplexc.NewClient(&cfg)
-	if err != nil {
-		exit(err)
-	}
-
-	defer func() {
-		client.Close()
-		log.Printf("logplex client shuts down, statistics: %#v", client.Stats)
-	}()
-
-	processLogMsg(die, client, msgInit, sr, exit)
-}
-
 func listen(die dieCh, sr *serveRecord) {
 	// Begin listening
-	l, err := net.Listen("unix", sr.P)
+	var l net.Listener
+	var pc net.PacketConn
+	var f *os.File
+	var err error
+
+	switch sr.protocol {
+	case "syslog":
+		os.Remove(sr.P)
+		pc, err = net.ListenPacket("unixgram", sr.P)
+	case "logfile":
+		i := 0
+		for {
+			f, err = os.Open(sr.P)
+			if err != nil {
+				if i < 15 {
+					log.Println("cannot open pipe", err)
+					time.Sleep(1 * time.Second)
+					i++
+					continue
+				}
+				break
+			}
+			break
+		}
+	default:
+		os.Remove(sr.P)
+		l, err = net.Listen("unix", sr.P)
+	}
+
 	if err != nil {
 		log.Fatalf(
 			"exiting, cannot listen to %q: %v",
-			sr.P, err)
-	}
-
-	// Make world-writable so anything can connect and send logs.
-	// This may be be worth locking down more, but as-is unless
-	// pg_logplexcollector and the Postgres server share the same
-	// running user common umasks will be useless.
-	fi, err := os.Stat(sr.P)
-	if err != nil {
-		log.Fatalf(
-			"exiting, cannot stat just created socket %q: %v",
-			sr.P, err)
-	}
-
-	err = os.Chmod(sr.P, fi.Mode().Perm()|0222)
-	if err != nil {
-		log.Fatalf(
-			"exiting, cannot make just created socket "+
-				"world-writable %q: %v",
 			sr.P, err)
 	}
 
@@ -298,26 +75,16 @@ func listen(die dieCh, sr *serveRecord) {
 		Period:             time.Second / 4,
 	}
 
-	for {
-		select {
-		case <-die:
-			log.Print("listener exits normally from die request")
-			return
-		default:
-			break
-		}
-
-		conn, err := l.Accept()
-		if err != nil {
-			log.Printf("accept error: %v", err)
-		}
-
-		if err != nil {
-			log.Fatalf("serve database suffers unrecoverable "+
-				"error: %v", err)
-		}
-
-		go logWorker(die, conn, templateConfig, sr)
+	switch sr.protocol {
+	case "logfebe":
+		logWorker(die, l, templateConfig, sr)
+	case "syslog":
+		go syslogWorker(die, pc, templateConfig, sr)
+	case "logfile":
+		lineWorker(die, f, templateConfig, sr)
+	default:
+		log.Fatalf("cannot comprehend protocol %v specified in "+
+			"servedb.", sr.protocol)
 	}
 }
 
@@ -356,7 +123,7 @@ func main() {
 
 	sdb := newServeDb(sdbDir)
 
-	var die chan struct{} = make(chan struct{})
+	die := make(chan struct{})
 
 	// Brutal hack to get around pathological Go use of virtual
 	// memory: die once in a while.  A supervisor (e.g. Upstart)
@@ -372,7 +139,7 @@ func main() {
 			}
 
 			log.Fatalf(
-				"serve database suffers an unrecoverable error: %v",
+				"serve database suffers an unrecoverable error in listen: %v",
 				err)
 		}
 
@@ -391,7 +158,6 @@ func main() {
 			// Set up new servers for the new database state.
 			snap := sdb.Snapshot()
 			for i := range snap {
-				os.Remove(snap[i].P)
 				go listen(die, &snap[i])
 			}
 		}
